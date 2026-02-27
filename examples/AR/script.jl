@@ -61,7 +61,7 @@ timevect = 0:T
 lag1 = [NaN;y[1:end-1]]     # Lag 1
 Z = lag1
 Z = Z[2:end, :]             # Remove first s rows with NaNs
-y = y[2:end]                # Remove lost observations
+y = y[2:end];               # Remove lost observations
 
  
 # ### Plot the data and the time-varying parameters

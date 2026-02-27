@@ -63,7 +63,7 @@ for t = (s+2):(T₊)
 end
 y = y[(s+2):end] # Remove presample values
 paramEvol = paramEvol[(s+1):end,:];
-timevect = 0:T
+timevect = 0:T;
 
 # ### Set up the SAR model as a nonlinear regression
 lag1 = [NaN;y[1:end-1]] # Lag 1
@@ -114,7 +114,7 @@ end
 σ₀ = 1                  # Initial state std deviation
 θ = SARParams(σₑ, σᵥ, σ₀, Z);
 
-nSim = 1000;            # Number of samples from posterior
+nSim = 3000;            # Number of samples from posterior
 
 # ### PGAS sampling
 nParticles = 100        # Number of particles for PGAS
@@ -176,7 +176,6 @@ end
 plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
 
-
 # ### FFBS posterior sampling using the Unscented Kalman filter (UKF)
 α = 1; β = 0; κ = 0;
 UKFdraws = FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim; 
@@ -194,7 +193,6 @@ for j = 1:nState
 end
 plot(plt..., layout = (1,2), size = (800, 350),  ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
-
 
 # ### FFBS posterior sampling using the Iterated Extended Kalman filter (IEKF)
 plotIEKF = true

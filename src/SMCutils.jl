@@ -39,23 +39,38 @@ function KLD(μ0, Σ0, μ1, Σ1)
 end
 
 # Helper function to make groups of equal size, last group may be smaller
-function splitEqualGroups(y, Z, nPerGroup)
+function splitEqualGroups(y, X, nPerGroup)
+
+    if typeof(X) <: Vector && (length(X) != length(y))
+        nParamObs = length(X) # number of parameters in observation eqn.
+    else
+        nParamObs = 1
+        X = [X]
+    end
     nElements = length(y)
     nGroups = ceil(Int, nElements/nPerGroup)
     Y = Vector{Vector{eltype(y)}}()
-    if !isempty(Z) && !isnothing(Z) 
-        Zg = Vector{Matrix{eltype(Z)}}()
-    else 
-        Zg = nothing
-    end
+    Z = Vector(undef, nParamObs)
+    for j = 1:nParamObs
+        if !isempty(X[j]) && !isnothing(X[j]) 
+            Z[j] = Vector{Matrix{eltype(X[j])}}()
+        else 
+            Z[j] = nothing
+        end
+    end 
     i = 1
     while i <= nElements
         push!(Y, y[i:min(i+nPerGroup-1, nElements)])
-        if !isempty(Z) && !isnothing(Z) 
-            push!(Zg, Z[i:min(i+nPerGroup-1, nElements), :])
+        for j = 1:nParamObs
+            if !isempty(X[j]) && !isnothing(X[j]) 
+                push!(Z[j], X[j][i:min(i+nPerGroup-1, nElements), :])
+            end
         end
         i += nPerGroup
     end
     groupSizes = length.(Y) 
-    return Y, Zg, groupSizes
+    if nParamObs == 1
+        Z = Z[1]
+    end
+    return Y, Z, groupSizes
 end

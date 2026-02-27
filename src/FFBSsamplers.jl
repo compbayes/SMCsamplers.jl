@@ -363,7 +363,7 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 
 """ 
 function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
-    filter_output = false, sample_t0 = true, μ_init = nothing)
+    filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100)
 
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
@@ -386,7 +386,7 @@ function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1
         u = (q == 1) ? U[t] : U[t,:]
         #y = (r == 1) ? Y[t] : Y[t,:]
         μ, Σ, μ̄, Σ̄ = laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, 
-            observation, θ, Σₙt, t, μ_init)
+            observation, θ, Σₙt, t, μ_init, max_iter)
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
         μ_pred[t,:] .= μ̄

@@ -283,7 +283,14 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         ## Perform the Kalman update using the linearized model
         μₖⁱ = Aₖ * μ̄ + bₖ
         Sₖ = Aₖ * Ω̄ * Aₖ' + Ωₖ 
-        Kₖ = Ω̄ * Aₖ' / Sₖ 
+        Kₖ = try
+            Ω̄ * Aₖ' / Sₖ 
+        catch
+            println("Ω̄ = ");display(Ω̄)
+            println("Sₖ = ");display(Sₖ)
+            println("Aₖ = ");display(Aₖ)
+            error("Kalman gain computation failed at iteration $i")
+        end
         
         μ_updated = μ̄ + Kₖ * (y .- μₖⁱ)
         Ω_updated = Ω̄ - Kₖ * Sₖ * Kₖ'
@@ -313,7 +320,7 @@ end
 
 """ 
 function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t, 
-        μ_init = nothing)
+        μ_init = nothing, max_iter=100)
 
     # Prior propagation step - moving state forward without new measurement
     μ̄ = A*μ .+ B*u
@@ -322,15 +329,17 @@ function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σ�
     if isnothing(μ_init) μ_init = μ̄  end
 
     # Measurement update - updating the N(μ̄, Ω̄) prior with the new data point
-    #try
+    μ, Ω = try
         filt_logpost(x) = logpdf(observation(param, x, t), y) + 
             logpdf(MvNormal(μ̄[:], Ω̄), x)
-        μ, Ω = laplace_approximation(filt_logpost, μ_init)  # Initial guess 
-    #catch
-        #println("the prior cov is:", Ω̄)
-        #println("the prior var is:", diag(Ω̄))
-        #println("the eigenvals are:", eigvals(Ω̄))
-    #end
+        laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)  # Initial guess 
+    catch
+        println("Ω̄: "); display(Ω̄)
+        println("the prior var is:"); display(diag(Ω̄))
+        error("Laplace approximation failed at time $t")
+    end
+    #println("the prior var at time t = $t is:"); display(diag(Ω̄)')
+
     return μ, Ω, μ̄, Ω̄
 end
 
