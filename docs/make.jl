@@ -1,8 +1,5 @@
 using Pkg
 
-# Add local registry
-Pkg.Registry.add(url="https://github.com/compbayes/CompBayesRegistry.git")
-
 # Activate the docs environment in docs/Project.toml
 Pkg.activate(@__DIR__)
 Pkg.develop(PackageSpec(path=pwd()))
