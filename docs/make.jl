@@ -1,3 +1,10 @@
+using Pkg
+
+# Activate the docs environment in docs/Project.toml
+Pkg.activate(@__DIR__)
+Pkg.develop(PackageSpec(path=pwd()))
+Pkg.instantiate()  # optional but good to keep
+
 # With minor changes from https://github.com/JuliaGaussianProcesses/AbstractGPs.jl/docs
 
 ### Process examples
@@ -10,7 +17,7 @@ mkpath(EXAMPLES_OUT)
 # Workaround for https://github.com/JuliaLang/Pkg.jl/issues/2219
 examples = filter!(isdir, readdir(joinpath(@__DIR__, "..", "examples"); join=true))
 above = joinpath(@__DIR__, "..")
-let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.instantiate(); Pkg.develop(path=\"$(above)\");"
+let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); Pkg.develop(path=\"$(above)\");"
     for example in examples
         if !success(`$(Base.julia_cmd()) -e $script $example`)
             error("project environment of example ", basename(example), " could not be instantiated",)
@@ -49,7 +56,7 @@ makedocs(;
     authors="Mattias Villani",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://mattiasvillani.github.io/SMCsamplers.jl",
+        canonical="https://compbayes.github.io/SMCsamplers.jl",
         edit_link="main",
         assets=String[],
         size_threshold = 2000 * 2^10, # 1000 KiB determines the maximal html size in KiB
@@ -71,6 +78,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/mattiasvillani/SMCsamplers.jl.git",
+    repo="github.com/compbayes/SMCsamplers.jl.git",
 )
 
