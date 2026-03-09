@@ -32,20 +32,6 @@ gr(legend = :bottom, grid = false, color = colors[2], lw = 2, legendfontsize=8,
 Random.seed!(123);
 ````
 
-````
-Precompiling packages...
-   2161.9 ms  ✓ MultivariateStats
-   2658.6 ms  ✓ Distributions → DistributionsChainRulesCoreExt
-   1904.9 ms  ✓ KernelDensity
-  64614.1 ms  ✓ Plots
-   3534.8 ms  ✓ Plots → FileIOExt
-   8574.1 ms  ✓ StatsPlots
-   5088.1 ms  ✓ Utils
-   9240.6 ms  ✓ SMCsamplers
-  8 dependencies successfully precompiled in 88 seconds. 343 already precompiled.
-
-````
-
 ### Set up the state-space model
 Set up static parameter structure and the model distributions for PGAS, and set static parameter values
 

@@ -1,5 +1,8 @@
 using Pkg
 
+# Add local registry
+Pkg.Registry.add(url="https://github.com/compbayes/CompBayesRegistry.git")
+
 # Activate the docs environment in docs/Project.toml
 Pkg.activate(@__DIR__)
 Pkg.develop(PackageSpec(path=pwd()))
@@ -17,7 +20,7 @@ mkpath(EXAMPLES_OUT)
 # Workaround for https://github.com/JuliaLang/Pkg.jl/issues/2219
 examples = filter!(isdir, readdir(joinpath(@__DIR__, "..", "examples"); join=true))
 above = joinpath(@__DIR__, "..")
-let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate(); Pkg.develop(path=\"$(above)\");"
+let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.instantiate(); Pkg.develop(path=\"$(above)\");"
     for example in examples
         if !success(`$(Base.julia_cmd()) -e $script $example`)
             error("project environment of example ", basename(example), " could not be instantiated",)
