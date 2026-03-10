@@ -16,14 +16,10 @@
 
 # First some preliminaries.
 using SMCsamplers, Plots, Distributions, LaTeXStrings, Random
+using Utils: quantile_multidim
+using Utils: mvcolors as colors
 
-colors = [
-    "#6C8EBF", "#c0a34d", "#780000", "#007878",     
-    "#b5c6df","#eadaaa","#AE6666", "#4CA0A0","#bf9d6c", "#3A6B35", 
-    "#9d6a6d","#d9c6c7", "#98bbb9", "#bf8d6c", 
-    "#CBD18F"]
-
-gr(legend = :topleft, grid = false, color = colors[2], lw = 2, legendfontsize=8,
+gr(legend = :bottom, grid = false, color = colors[2], lw = 2, legendfontsize=8,
     xtickfontsize=8, ytickfontsize=8, xguidefontsize=8, yguidefontsize=8,
     titlefontsize = 10, markerstrokecolor = :auto)
 
@@ -64,10 +60,11 @@ plot!(y; seriestype=:scatter, label="observed, y", xlabel="t", markersize = 2,
     color = colors[1], markerstrokecolor = :auto)
 
 # ### PGAS sampling
-Nₚ = 20             # Number of particles for PGAS
-Nₛ = 10000;         # Number of samples from posterior
-sample_t0 = true    # Sample state at t=0 ?
-PGASdraws = PGASsampler(y, θ, Nₛ, Nₚ, prior, transition, observation; sample_t0 = sample_t0)
+nParticles = 20             # Number of particles for PGAS
+nSim = 10000;         # Number of samples from posterior
+sample_t0 = false    # Sample state at t=0 ?
+PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation; 
+    sample_t0 = sample_t0)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 
@@ -81,12 +78,12 @@ A = θ.a
 C = 1
 B = 0
 U = zeros(T,1);
-FFBSdraws = FFBS(U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, Nₛ; sample_t0 = sample_t0);
+FFBSdraws = FFBS(U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim; sample_t0 = sample_t0);
 FFBSmean = mean(FFBSdraws, dims = 3) 
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3);
 
 # ### Plot the posterior mean and 95% C.I. intervals from both algorithms
-plottrue = true
+plottrue = false
 p = length(prior(θ))
 plt = []
 for j in 1:p
@@ -100,7 +97,7 @@ for j in 1:p
 
     #PGAS
     plot!(PGASmean[:,j], lw = 1,
-        c = colors[j], linestyle = :solid, label = "PGAS(N=$Nₚ)")
+        c = colors[j], linestyle = :solid, label = "PGAS(N=$nParticles)")
     plot!(PGASquantiles[:,j,1], fillrange = PGASquantiles[:,j,2],
         fillalpha = 0.2, fillcolor = colors[j], linecolor = colors[j],
         label = "", lw = 0) 

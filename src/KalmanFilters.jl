@@ -224,45 +224,155 @@ function kalmanfilter_update_unscented(μ, Ω, u, y, A, B, C::Function, Cargs, �
 
 end
 
+
 """ 
-    laplace_kalmanfilter_update(μ, Ω, u, y, A, B, logLik, Σₙ) 
+    kalmanfilter_update_IPLF(μ, Ω, u, y, A, B,  condMean, condCov, Cargs,  Σₙ, maxIter, γ, W) 
+
+A single extended Kalman filter update at time t of the state space model: 
+
+yₜ ~ p(xₜ),                               Measurement equation
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
+
+where f(xₜ) is the distribution of observations.
+
+xₜ is the n-dim state
+uₜ is the m-dim control
+yₜ is the k-dim observed data. 
+condMean is the conditional mean of yₜ given xₜ
+condCov is the conditional covariance of yₜ given xₜ
+
+Reference: Simo Sarkka and Lennart Svensson (2023). Bayesian Filtering and Smoothing. Second Edition. Cambridge University Press.
+"""
+
+## PrLF and IPLF
+function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param,  Σₙ, t,
+    maxIter, γ, ωₘ, ωₛ)
+
+    ### Prior propagation
+    μ̄ = A*μ .+ B*u
+    Ω̄ = A*Ω*A' + Σₙ   
+
+    μ = deepcopy(μ̄)
+    Ω = deepcopy(Ω̄) 
+
+    ### Measurement update
+    for i in 1:maxIter
+
+        L̄ = cholesky(Hermitian(Ω)).L
+
+        ## Generate sigma points centered at the current mean μ
+        χ = [μ μ .+ (L̄ * γ) μ .- (L̄ * γ)] # n×(2n+1) matrix with sigma points; N(μ, Ω)
+
+        ## Propagate the sigma points through the conditional mean and covariance functions
+        μₖ =  [condMean(param, χ[:, i], t) for i in 1:size(χ, 2)]
+        Pₖʸ = [condCov(param, χ[:, i], t) for i in 1:size(χ, 2)]
+
+        ## Compute the required moments:
+        μₖ⁺ = sum(μₖ .* ωₘ) ## marginal mean of yₜ
+        Δμ = reduce(hcat, [v .- μₖ⁺ for v in μₖ])' 
+        Pₖˣʸ = (χ .- μ)* Diagonal(ωₛ) * Δμ # cross-covariance between xₜ and yₜ
+        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺)*(v .- μₖ⁺)' for v in μₖ])) # predicted measurement covariance
+ 
+        ## Linearization of measurement model using Equations (10.14).
+        # yₜ ≈ Aₖ * xₜ + bₖ + eₖ, where eₖ ~ N(0, Ωₖ)
+
+        Aₖ = Pₖˣʸ' * inv(Ω)
+        bₖ = μₖ⁺ .- Aₖ * μ
+        Ωₖ = Pₖʸ .- Aₖ * Ω * Aₖ'
+        
+        ## Perform the Kalman update using the linearized model
+        μₖⁱ = Aₖ * μ̄ + bₖ
+        Sₖ = Aₖ * Ω̄ * Aₖ' + Ωₖ 
+        Kₖ = try
+            Ω̄ * Aₖ' / Sₖ 
+        catch
+            println("Ω̄ = ");display(Ω̄)
+            println("Sₖ = ");display(Sₖ)
+            println("Aₖ = ");display(Aₖ)
+            error("Kalman gain computation failed at iteration $i")
+        end
+        
+        μ_updated = μ̄ + Kₖ * (y .- μₖⁱ)
+        Ω_updated = Ω̄ - Kₖ * Sₖ * Kₖ'
+
+        distance = KLD(μ, Ω, μ_updated, Ω_updated)
+        
+        if distance < 1e-3
+            μ = μ_updated
+            Ω = Ω_updated
+            #println("Converged at iteration $i")
+            break
+        end
+
+        μ = μ_updated
+        Ω = Ω_updated
+    end
+
+    return μ, Ω, μ̄, Ω̄
+
+end
+
+
+
+""" 
+    laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t) 
 
 
 """ 
-function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, θ, Σₙ, t)
+function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t, 
+        μ_init = nothing, max_iter=100)
 
     # Prior propagation step - moving state forward without new measurement
     μ̄ = A*μ .+ B*u
-    Ω̄ = A*Ω*A' + Σₙ
+    Ω̄ = Hermitian(A*Ω*A' + Σₙ)
+
+    if isnothing(μ_init) μ_init = μ̄  end
 
     # Measurement update - updating the N(μ̄, Ω̄) prior with the new data point
-    filt_logpost(x) = logpdf(observation(θ, x, t), y) + logpdf(MvNormal(μ̄[:], Ω̄), x)
-    μ, Ω = laplace_approximation(filt_logpost, μ̄)  # Initial guess 
+    μ, Ω = try
+        filt_logpost(x) = logpdf(observation(param, x, t), y) + 
+            logpdf(MvNormal(μ̄[:], Ω̄), x)
+        laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)  # Initial guess 
+    catch
+        println("Ω̄: "); display(Ω̄)
+        println("the prior var is:"); display(diag(Ω̄))
+        error("Laplace approximation failed at time $t")
+    end
+    #println("the prior var at time t = $t is:"); display(diag(Ω̄)')
 
     return μ, Ω, μ̄, Ω̄
 end
 
-# Laplace approx. (univariate only).
 function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100)
     
     # Find mode (MAP estimate)
-    function find_mode(x0)
-        x = copy(x0)
-        for _ in 1:max_iter
-            g = ForwardDiff.gradient(logposterior, x)
-            H = ForwardDiff.hessian(logposterior, x)
-            #g = ForwardDiff.derivative(logposterior, x)
-            #H = ForwardDiff.derivative(x -> ForwardDiff.derivative(logposterior, x), x)
-            Δx = -H \ g  # Newton-Raphson step
-            x += Δx
-            if norm(Δx) < 1e-6
-                return x
+    handbaked = false
+    if handbaked 
+        function find_mode(x0)
+            x = copy(x0)
+            for _ in 1:max_iter
+                g = ForwardDiff.gradient(logposterior, x)
+                H = ForwardDiff.hessian(logposterior, x)
+                #g = ForwardDiff.derivative(logposterior, x)
+                #H = ForwardDiff.derivative(x -> ForwardDiff.derivative(logposterior, x), x)
+                Δx = -H \ g  # Newton-Raphson step
+                x += Δx
+                if norm(Δx) < 1e-6
+                    return x
+                end
             end
+            error("Mode finding did not converge")
         end
-        error("Mode finding did not converge")
+        θ_mode = find_mode(initial_guess)
+    else
+        optres = optimize(x -> -logposterior(x), initial_guess, 
+            method = NewtonTrustRegion();
+            autodiff = :forward, f_abstol = 1e-6, iterations = max_iter)
+        θ_mode = Optim.minimizer(optres)
+        if Optim.iterations(optres) > 10
+            println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
+        end
     end
-    
-    θ_mode = find_mode(initial_guess)
     
     # Compute Hessian at mode
     Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
@@ -276,34 +386,3 @@ function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_i
 
 end
 
-# Laplace for multivariate:
-function laplace_approximation_multi(logposterior, initial_guess; cov_scale=1.0, 
-    max_iter=100)
-    
-    # Find mode (MAP estimate)
-    function find_mode(x0)
-        x = copy(x0)
-        for _ in 1:max_iter
-            g = ForwardDiff.gradient(logposterior, x)
-            H = ForwardDiff.hessian(logposterior, x)
-            Δx = -H \ g  # Newton-Raphson step
-            x += Δx
-            if norm(Δx) < 1e-6
-                return x
-            end
-        end
-        error("Mode finding did not converge")
-    end
-    
-    θ_mode = find_mode(initial_guess)
-    
-    # Compute Hessian at mode
-    Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
-    
-    # Adjust covariance if needed (sometimes too narrow/wide).
-    Σ *= cov_scale^2
-    
-    # Return results
-    return θ_mode, Σ
-
-end

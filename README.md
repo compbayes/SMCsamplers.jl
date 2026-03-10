@@ -1,17 +1,17 @@
 # SMCsamplers.jl
 
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://mattiasvillani.github.io/SMCsamplers.jl/dev/)
-[![Build Status](https://github.com/mattiasvillani/SMCsamplers.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/mattiasvillani/SMCsamplers.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/mattiasvillani/SMCsamplers.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/mattiasvillani/SMCsamplers.jl)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://compbayes.github.io/SMCsamplers.jl/dev/)
+[![Build Status](https://github.com/compbayes/SMCsamplers.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/compbayes/SMCsamplers.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/compbayes/SMCsamplers.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/compbayes/SMCsamplers.jl)
 
 ## Description
 
-This is the start of a package for some Sequential Monte Carlo samplers in Julia. Some examples scripts can be found in the `examples` folder.
+Julia implementation of some posterior samplers for state-space models with general non-linear/non-Gaussian observation models and linear (heteroscedastic) transition models. Some example scripts can be found in the `examples` folder.
 
 ## Installation
 Install from the Julia package manager (via Github) by typing `]` in the Julia REPL:
 ```
-] add git@github.com:mattiasvillani/SMCsamplers.jl.git
+] add git@github.com:compbayes/SMCsamplers.jl.git
 ```
 
 ## Example
@@ -39,7 +39,7 @@ a = 0.9         # Persistence
 σ₀ = 0.5        # Initial observation std deviation
 T = 200         # Length of time series
 
-θ = SVParams(a, σᵥ, σₑ) # Set up parameter struct for PGAS
+θ = SVParams(a, σᵥ, σ₀) # Set up parameter struct for PGAS
 
 # Algorithm settings
 Nₚ = 20         # Number of particles for PGAS

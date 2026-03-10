@@ -14,12 +14,8 @@
 # The example shows that PGAS can work poorly when a vague prior is used as the proposal distribution for the state at the first time step. This is the default setting in this package, but should not always be used. Later in the example we use a better proposal and show that PGAS works well.
 
 using SMCsamplers, Plots, Distributions, LaTeXStrings, Random, PDMats, LinearAlgebra
-
-colors = [
-    "#6C8EBF", "#c0a34d", "#780000", "#007878",     
-    "#b5c6df","#eadaaa","#AE6666", "#4CA0A0","#bf9d6c", "#3A6B35", 
-    "#9d6a6d","#d9c6c7", "#98bbb9", "#bf8d6c", 
-    "#CBD18F"]
+using Utils: quantile_multidim
+using Utils: mvcolors as colors
 
 gr(legend = :topleft, grid = false, color = colors[2], lw = 2, legendfontsize=8,
     xtickfontsize=8, ytickfontsize=8, xguidefontsize=8, yguidefontsize=8,

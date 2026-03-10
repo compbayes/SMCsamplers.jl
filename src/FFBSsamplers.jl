@@ -88,9 +88,9 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 function FFBS(U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
         filter_output = false, sample_t0 = true)
 
-    T = size(Y,1)   # Number of time steps
+    T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
-    r = size(Y,2)   # Dimension of the observed data vector
+    #r = size(Y,2)   # Dimension of the observed data vector
     q = size(U,2)   # Dimension of the control vector
     staticA = (ndims(A) == 3) ? false : true
     staticC = (ndims(C) == 3) ? false : true
@@ -111,8 +111,8 @@ function FFBS(U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1;
         Σₑt = staticΣₑ ? Σₑ : Σₑ[t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
-        y = (r == 1) ? Y[t] : Y[t,:]
-        μ, Σ, μ̄, Σ̄ = kalmanfilter_update(μ, Σ, u, y, At, B, Ct, Σₑt, Σₙt)
+        #y = (r == 1) ? Y[t] : Y[t,:]
+        μ, Σ, μ̄, Σ̄ = kalmanfilter_update(μ, Σ, u, Y[t], At, B, Ct, Σₑt, Σₙt)
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
         μ_pred[t,:] .= μ̄
@@ -163,9 +163,9 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 function FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1, maxIter = 1, 
     tol = 1e-2, linesearch = false; filter_output = false, sample_t0 = true)
 
-    T = size(Y,1)   # Number of time steps
+    T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
-    r = size(Y,2)   # Dimension of the observed data vector
+    #r = size(Y,2)   # Dimension of the observed data vector
     q = size(U,2)   # Dimension of the control vector
     staticA = (ndims(A) == 3) ? false : true
     staticΣₑ = (ndims(Σₑ) == 3  || eltype(Σₑ) <: PDMat) ? false : true
@@ -186,14 +186,14 @@ function FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1,
         Σₑt = staticΣₑ ? Σₑ : Σₑ[t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
-        y = (r == 1) ? Y[t] : Y[t,:]
+        #y = (r == 1) ? Y[t] : Y[t,:]
         if maxIter == 1
-            μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended(μ, Σ, u, y, At, B, C, ∂C, Cargs_t, Σₑt, Σₙt)
+            μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended(μ, Σ, u, Y[t], At, B, C, ∂C, Cargs_t, Σₑt, Σₙt)
         else 
             if linesearch 
-                μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended_iter_line(μ, Σ, u, y, At, B, C, ∂C, Cargs_t, Σₑt, Σₙt, maxIter, tol)
+                μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended_iter_line(μ, Σ, u, Y[t], At, B, C, ∂C, Cargs_t, Σₑt, Σₙt, maxIter, tol)
             else
-                μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended_iter(μ, Σ, u, y, At, B, C, ∂C, Cargs_t, Σₑt, Σₙt, maxIter, tol)
+                μ, Σ, μ̄, Σ̄ = kalmanfilter_update_extended_iter(μ, Σ, u, Y[t], At, B, C, ∂C, Cargs_t, Σₑt, Σₙt, maxIter, tol)
             end
         end
         μ_filter[t,:] .= μ
@@ -242,9 +242,9 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 function FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
         α = 1, β = 0, κ = 0, filter_output = false, sample_t0 = true)
 
-    T = size(Y,1)   # Number of time steps
+    T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
-    r = size(Y,2)   # Dimension of the observed data vector
+    #r = size(Y,2)   # Dimension of the observed data vector
     q = size(U,2)   # Dimension of the control vector
     staticA = (ndims(A) == 3) ? false : true
     staticΣₑ = (ndims(Σₑ) == 3  || eltype(Σₑ) <: PDMat) ? false : true
@@ -270,8 +270,8 @@ function FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim =
         Σₑt = staticΣₑ ? Σₑ : Σₑ[t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
-        y = (r == 1) ? Y[t] : Y[t,:]
-        μ, Σ, μ̄, Σ̄ = kalmanfilter_update_unscented(μ, Σ, u, y, At, B, C, Cargs_t, 
+        #y = (r == 1) ? Y[t] : Y[t,:]
+        μ, Σ, μ̄, Σ̄ = kalmanfilter_update_unscented(μ, Σ, u, Y[t], At, B, C, Cargs_t, 
             Σₑt, Σₙt, γ, ωₘ, ωₛ)
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
@@ -289,6 +289,60 @@ function FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim =
     end
 
 end
+
+
+function FFBS_SLR(U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, μ₀, Σ₀,
+        maxIter, nSim = 1; α = 1, β = 0, κ = 0, filter_output = false, 
+        sample_t0 = true)
+    T = length(Y)   # Number of time steps
+    n = length(μ₀)  # Dimension of the state vector  
+    q = size(U,2)   # Dimension of the control vector
+    staticA = (ndims(A) == 3) ? false : true
+    staticΣₙ = (ndims(Σₙ) == 3  || eltype(Σₙ) <: PDMat) ? false : true
+
+    # Set up the weights for the UT transform
+    λ  = α^2*(n + κ) - n
+    ωₘ = [λ/(n + λ); ones(2*n)/(2*(n + λ))]
+    ωₛ  = [λ/(n + λ) + (1 - α^2 + β); ωₘ[2:end]]
+
+    γ = sqrt(n + λ)
+
+    # Run Kalman filter and collect matrices
+    μ_filter = zeros(T, n)      # Storage of μₜₜ
+    Σ_filter = zeros(n, n, T)   # Storage of Σₜₜ
+    μ_pred = zeros(T, n)        # Storage of μₜ,ₜ₋₁
+    Σ_pred = zeros(n, n, T)     # Storage of Σₜ,ₜ₋₁
+
+    μ = deepcopy(μ₀)
+    Σ = deepcopy(Σ₀)
+
+    for t = 1:T 
+        At = staticA ? A : @view A[:,:,t]
+        Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
+        u = (q == 1) ? U[t] : U[t,:]
+        μ, Σ, μ̄, Σ̄ = kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov, 
+            param,  Σₙt, t, maxIter, γ ,ωₘ, ωₛ)
+
+        #println("Time step: ", t, " Mean: ", μ, " Covariance: ", Σ)
+        
+        μ_filter[t,:] .= μ
+        Σ_filter[:,:,t] .= Σ
+        μ_pred[t,:] .= μ̄
+        Σ_pred[:,:,t] .= Σ̄
+    end
+
+    # Backward sampling for t = T, T-1, ..., 1
+    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+        sample_t0 = sample_t0)
+
+    if filter_output
+        return Xdraws, μ_filter, Σ_filter
+    else
+        return Xdraws
+    end
+
+end
+
 
 
 """ 
@@ -309,11 +363,11 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 
 """ 
 function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
-    filter_output = false, sample_t0 = true)
+    filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100)
 
-    T = size(Y,1)   # Number of time steps
+    T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
-    r = size(Y,2)   # Dimension of the observed data vector
+    #r = size(Y,2)   # Dimension of the observed data vector
     q = size(U,2)   # Dimension of the control vector
     staticA = (ndims(A) == 3) ? false : true
     staticΣₙ = (ndims(Σₙ) == 3  || eltype(Σₙ) <: PDMat) ? false : true
@@ -330,9 +384,9 @@ function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1
         At = staticA ? A : @view A[:,:,t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
-        y = (r == 1) ? Y[t] : Y[t,:]
-        μ, Σ, μ̄, Σ̄ = laplace_kalmanfilter_update(μ, Σ, u, y, At, B, 
-            observation, θ, Σₙt, t)
+        #y = (r == 1) ? Y[t] : Y[t,:]
+        μ, Σ, μ̄, Σ̄ = laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, 
+            observation, θ, Σₙt, t, μ_init, max_iter)
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
         μ_pred[t,:] .= μ̄
