@@ -38,7 +38,7 @@ function SimTVReg(T, p, σₑ, Σₙ, Σ₀ = Σₙ)
     return y, Z, β
 end
 
-p = 2      # State size - number of β parameters, including intercept
+p = nState = 2      # State size - number of β parameters, including intercept
 T = 200    # Number of observations
 σₑ = 1
 Σₙ = PDMat([1 0;0 0.1])     # State innovation covariance matrix
@@ -85,7 +85,8 @@ end
 B = 0.0
 U = zeros(T,1)
 
-FFBSdraws = FFBS(U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, Nₛ);
+FFBSdraws = zeros(T + 1, nState, Nₛ);
+FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, Nₛ);
 FFBSmean = mean(FFBSdraws, dims = 3)[2:end,:,1] # Exclude initial state at t=0
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3)[2:end,:,:];
 

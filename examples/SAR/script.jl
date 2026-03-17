@@ -160,8 +160,10 @@ Cargs = [Z[t,:] for t in 1:T];
 ∂C(state, z) = ForwardDiff.gradient(state -> C(state, z), state)';
 
 # ### FFBS posterior sampling using the Extended Kalman filter (EKF)
-EKFdraws, μ_filterEKF, Σ_filterEKF  = FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim; 
-    filter_output = true, sample_t0 = sample_t0);
+
+EKFdraws = zeros(T + sample_t0, nState, nSim);
+μ_filterEKF, Σ_filterEKF  = FFBSx!(EKFdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
+    μ₀, Σ₀, nSim; filter_output = true, sample_t0 = sample_t0);
 EKFdraws = restr.(EKFdraws) # Apply the restriction to the draws
 EKFmedian = median(EKFdraws, dims = 3)[:,:,1];
 EKFquantiles = quantile_multidim(EKFdraws, [0.025, 0.975], dims = 3);
@@ -178,7 +180,8 @@ plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "ti
 
 # ### FFBS posterior sampling using the Unscented Kalman filter (UKF)
 α = 1; β = 0; κ = 0;
-UKFdraws = FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim; 
+UKFdraws = zeros(T + sample_t0, nState, nSim);
+FFBS_unscented!(UKFdraws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim; 
     α = α, β = β, κ = κ, sample_t0 = sample_t0);
 UKFdraws = restr.(UKFdraws) # Apply the restriction to the draws
 UKFmedian = median(UKFdraws, dims = 3)[:,:,1]
@@ -199,7 +202,8 @@ plotIEKF = true
 if plotIEKF
     maxIter = 10
     tol = 10^-4 # tolerance for convergence
-    IEKFdraws, μ_filterIEKF, Σ_filterIEKF = FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, 
+    IEKFdraws = zeros(T + sample_t0, nState, nSim);
+    FFBSx!(IEKFdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, 
         nSim, maxIter, tol; filter_output = true, sample_t0 = sample_t0);
     IEKFdraws = restr.(IEKFdraws) # Apply the restriction to the draws
     IEKFmedian = median(IEKFdraws, dims = 3)[:,:,1];
@@ -222,7 +226,8 @@ if plotIEKFL
     linesearch = true
     maxIter = 10
     tol = 10^-4 # tolerance for convergence
-    IEKFLdraws, μ_filterIEKFL, Σ_filterIEKFL = FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
+    IEKFLdraws = zeros(T + sample_t0, nState, nSim);
+    FFBSx!(IEKFLdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
         μ₀, Σ₀, nSim, maxIter, tol, linesearch; filter_output = true, 
         sample_t0 = sample_t0);
     IEKFLdraws = restr.(IEKFLdraws) # Apply the restriction to the draws
