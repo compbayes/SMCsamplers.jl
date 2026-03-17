@@ -6,12 +6,15 @@
 
 ## Description
 
-Julia implementation of some posterior samplers for state-space models with general non-linear/non-Gaussian observation models and linear (heteroscedastic) transition models. Some example scripts can be found in the `examples` folder.
+Julia implementation of some posterior samplers for state-space models with general non-linear/non-Gaussian observation models and linear (heteroscedastic) transition models. Some example scripts can be found in the `examples` folder, and in the Examples section of the documentation. See below of a simple PGAS example.
 
 ## Installation
-Install from the Julia package manager (via Github) by typing `]` in the Julia REPL:
+The package is in the [CompBayesRegistry](https://github.com/compbayes/CompBayesRegistry), which must first be added to your Julia. The package can then be installed by the usual `add` mechanism in the Julia Package manager.
+
+Install from the Julia package manager by typing `]` in the Julia REPL, followed by
 ```
-] add git@github.com:compbayes/SMCsamplers.jl.git
+registry add https://github.com/compbayes/CompBayesRegistry.git
+add SMCsamplers
 ```
 
 ## Example
