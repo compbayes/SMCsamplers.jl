@@ -75,9 +75,9 @@ plot(plt1, plt2, layout = (2,1))
 ### PGAS sampling
 
 ````julia
-Nₚ = 20         # Number of particles for PGAS
-Nₛ = 1000       # Number of samples from posterior
-PGASdraws = PGASsampler(y, θ, Nₛ, Nₚ, prior, transition, observation)
+nParticles = 20         # Number of particles for PGAS
+nSim = 1000       # Number of samples from posterior
+PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 ````
@@ -86,7 +86,8 @@ PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 
 ````julia
 plt = plot(x, c = colors[3], lw = 1, label = "true state")
-plot!(PGASmean[:,1], lw = 1, c = colors[1], linestyle = :solid, label = "PGAS(N=$Nₚ)")
+plot!(PGASmean[:,1], lw = 1, c = colors[1], linestyle = :solid,
+    label = "PGAS(N=$nParticles)")
 plot!(PGASquantiles[:,1,1], fillrange = PGASquantiles[:,1,2],
         fillalpha = 0.2, fillcolor = colors[1], linecolor = colors[1], label = "", lw = 0)
 ````

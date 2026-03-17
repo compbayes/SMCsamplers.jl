@@ -112,7 +112,7 @@ U = zeros(T,1)
 Σₙ = Q; 
 
 FFBSdraws = zeros(T + 1, nState, nSim);
-FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim);
+FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀);
 FFBSmean = mean(FFBSdraws, dims = 3)[2:end,:,1] # Exclude initial state at t=0
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3)[2:end,:,:];
 

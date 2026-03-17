@@ -69,9 +69,9 @@ observation(θ, state, t) = Normal(θ.Z[t,:] ⋅ state, θ.σₑ)
 θ = ParamTvReg(σₑ, Σₙ, μ₀, Σ₀, y, Z);
 
 # ### PGAS
-Nₚ = 20       # Number of particles
-Nₛ = 1000     # Number of samples from posterior
-PGASdraws = PGASsampler(y, θ, Nₛ, Nₚ, prior, transition, observation)
+nParticles = 20       # Number of particles
+nSim = 1000     # Number of samples from posterior
+PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 
@@ -85,8 +85,8 @@ end
 B = 0.0
 U = zeros(T,1)
 
-FFBSdraws = zeros(T + 1, nState, Nₛ);
-FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, Nₛ);
+FFBSdraws = zeros(T + 1, nState, nSim);
+FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀);
 FFBSmean = mean(FFBSdraws, dims = 3)[2:end,:,1] # Exclude initial state at t=0
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3)[2:end,:,:];
 
@@ -103,7 +103,8 @@ for j in 1:p
         plt_tmp = plot(title = L"\beta_{%$(j-1)}", legend = :bottomleft)
     end
     ## PGAS
-    plot!(PGASmean[:,j], lw = 1, c = colors[j], linestyle = :solid, label = "PGAS(N=$Nₚ)")
+    plot!(PGASmean[:,j], lw = 1, c = colors[j], linestyle = :solid, 
+        label = "PGAS(N=$nParticles)")
     plot!(PGASquantiles[:,j,1], fillrange = PGASquantiles[:,j,2],
         fillalpha = 0.2, fillcolor = colors[j], linecolor = colors[j],
         label = "", lw = 0) 

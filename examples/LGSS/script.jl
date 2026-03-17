@@ -80,7 +80,7 @@ B = 0
 U = zeros(T,1);
 nState = length(μ₀)
 FFBSdraws = zeros(T + sample_t0, nState, nSim);
-FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim; sample_t0 = sample_t0);
+FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀; sample_t0 = sample_t0);
 FFBSmean = mean(FFBSdraws, dims = 3) 
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3);
 

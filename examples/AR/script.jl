@@ -149,7 +149,7 @@ Cargs = [Z[t,:] for t in 1:T];
 # ### FFBS posterior sampling using the Extended Kalman filter (EKF)
 EKFdraws = zeros(T + sample_t0, nState, nSim)
 μ_filterEKF, Σ_filterEKF  = FFBSx!(EKFdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
-    μ₀, Σ₀, nSim; filter_output = true);
+    μ₀, Σ₀; filter_output = true);
 EKFdraws = restr.(EKFdraws) # Apply the restriction to the draws
 EKFmedian = median(EKFdraws, dims = 3)[:,:,1];
 EKFquantiles = quantile_multidim(EKFdraws, [0.025, 0.975], dims = 3);
@@ -168,7 +168,7 @@ plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "ti
 # ### FFBS posterior sampling using the Unscented Kalman filter (UKF)
 α = 1; β = 0; κ = 0;
 UKFdraws = zeros(T + sample_t0, nState, nSim)
-FFBS_unscented!(UKFdraws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim; 
+FFBS_unscented!(UKFdraws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀; 
     α = α, β = β, κ = κ);
 UKFdraws = restr.(UKFdraws) # Apply the restriction to the draws
 UKFmedian = median(UKFdraws, dims = 3)[:,:,1]
@@ -192,7 +192,7 @@ if plotIEKF
     tol = 10^-4 # tolerance for convergence
     IEKFdraws = zeros(T + sample_t0, nState, nSim)
     μ_filterIEKF, Σ_filterIEKF = FFBSx!(IEKFdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
-        μ₀, Σ₀, nSim, maxIter, tol; filter_output = true);
+        μ₀, Σ₀, maxIter, tol; filter_output = true);
     IEKFdraws = restr.(IEKFdraws) # Apply the restriction to the draws
     IEKFmedian = median(IEKFdraws, dims = 3)[:,:,1];
     IEKFquantiles = quantile_multidim(IEKFdraws, [0.025, 0.975], dims = 3);
@@ -216,7 +216,7 @@ if plotIEKFL
     tol = 10^-4 # tolerance for convergence
     IEKFLdraws = zeros(T + sample_t0, nState, nSim)
     μ_filterIEKFL, Σ_filterIEKFL = FFBSx!(IEKFLdraws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, 
-        μ₀, Σ₀, nSim, maxIter, tol, linesearch; filter_output = true);
+        μ₀, Σ₀, maxIter, tol, linesearch; filter_output = true);
     IEKFLdraws = restr.(IEKFLdraws) # Apply the restriction to the draws
     IEKFLmedian = median(IEKFLdraws, dims = 3)[:,:,1];
     IEKFLquantiles = quantile_multidim(IEKFLdraws, [0.025, 0.975], dims = 3);
@@ -240,7 +240,7 @@ if plotLaplace
     nFailure = Ref(0) # Persistent counter that gets updated when failures occur
     LaplaceDraws = zeros(T + sample_t0, nState, nSim)
     μ_filterLaplace, Σ_filterLaplace = FFBS_laplace!(LaplaceDraws, U, Y, A, B, Σₙ, 
-        μ₀, Σ₀, observation, θ, nSim; filter_output = true, nFailure = nFailure);
+        μ₀, Σ₀, observation, θ; filter_output = true, nFailure = nFailure);
     LaplaceDraws = restr.(LaplaceDraws) # Apply the restriction to the draws
     Laplacemedian = median(LaplaceDraws, dims = 3)[:,:,1];
     Laplacequantiles = quantile_multidim(LaplaceDraws, [0.025, 0.975], dims = 3);

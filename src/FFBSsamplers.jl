@@ -200,7 +200,7 @@ The control signals are the rows of the T×m matrix U
 Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1, maxIter = 1, 
+function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, maxIter = 1, 
     tol = 1e-2, linesearch = false; filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -242,7 +242,7 @@ function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, n
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
         sample_t0 = sample_t0)
 
     if filter_output
@@ -279,7 +279,7 @@ The control signals are the rows of the T×m matrix U
 Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
+function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀; 
         α = 1, β = 0, κ = 0, filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -319,7 +319,7 @@ function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
         sample_t0 = sample_t0)
 
     if filter_output
@@ -349,7 +349,7 @@ Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of
 
 """ 
 function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, 
-        μ₀, Σ₀, maxIter, nSim = 1; α = 1, β = 0, κ = 0, filter_output = false, 
+        μ₀, Σ₀, maxIter; α = 1, β = 0, κ = 0, filter_output = false, 
         sample_t0 = true)
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
@@ -388,7 +388,7 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
         sample_t0 = sample_t0)
 
     if filter_output
@@ -418,7 +418,7 @@ The control signals are the rows of the T×m matrix U
 Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
+function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
     filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
     nFailure = Ref(0))
 
@@ -456,7 +456,7 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, 
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
         sample_t0 = sample_t0)
 
     if filter_output
