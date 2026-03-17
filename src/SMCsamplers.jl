@@ -13,7 +13,7 @@ export kalmanfilter_update_extended_iter, kalmanfilter_update_extended_iter_line
 export kalmanfilter_update_IPLF
 
 include("FFBSsamplers.jl")
-export FFBS, FFBSx, FFBS_unscented, FFBS_SLR, FFBS_laplace
+export FFBS!, FFBSx!, FFBS_unscented!, FFBS_SLR!, FFBS_laplace!
 
 include("ParticleGibbsSamplers.jl")
 export PGASsimulate!, PGASsampler

@@ -1,66 +1,53 @@
 
-# Backward sampling step for a given t. A is a vector or Matrix here.
-function BackwardSim(x, μ_filt, Σ_filt, μ_pred, Σ_pred, A::AbstractArray, t)
-    μback = μ_filt + Σ_filt*A'*( Σ_pred\(x .- μ_pred) )
-    Σback = Σ_filt -  Σ_filt*A'*( Σ_pred \ A )*Σ_filt
-    try 
-        return rand(MvNormal(μback, Hermitian(Σback)))
-    catch # Σₙ ≤ eps() so, Σ_pred ≈ Σ_filt and Σback ≈ 0. xₜ = xₜ₊₁ 
-        return x   
-    end
-end
+@views function BackwardSampling!(Xdraws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀,
+        nSim = 1; sample_t0 = true)
+    T, n = size(μ_filter)   # T does not include t=0, n is the dim of state
+    X = zeros(n, nSim)      # buffer, reused every t
+    μback = zeros(n, nSim)
+    μ_zero = zeros(n)       # pre-allocated zero mean for MvNormal
+    AS = zeros(n, n)        # buffer for A * Σ_filter
+    G  = zeros(n, n)        # backward gain matrix
 
-# Backward sampling step for a given t. A is a scalar here.
-function BackwardSim(x, μ_filt, Σ_filt, μ_pred, Σ_pred, A::Number, t)
-    μback = μ_filt + Σ_filt*A'*( Σ_pred\(x .- μ_pred) )
-    Σback = Σ_filt -  Σ_filt*A'*( Σ_pred \ [A] )*Σ_filt
-    try 
-        return rand(MvNormal(μback, Hermitian(Σback)))
-    catch # Σₙ ≤ eps() so, Σ_pred ≈ Σ_filt and Σback ≈ 0. xₜ = xₜ₊₁ 
-        return x   
-    end
-end
+    # Sample all nSim iter at once at t = T
+    rand!(MvNormal(μ_filter[T,:], Hermitian(Σ_filter[:,:,T])), X) # nSim iid draws
+    Xdraws[T + sample_t0, :, :] .= X
 
-
-function BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim = 1;  
-    sample_t0 = true) # FIXME: this function assumes that A is static
-
-    T, n = size(μ_filter)   # Number of time steps and state dimension
-
-    # Backward sampling for t = T, T-1, ..., 1
-    Xdraws = zeros(sample_t0 + T, n, nSim)  
-    for i = 1:nSim 
-
-        X = zeros(T, n) 
-        X[T,:] = rand(MvNormal(μ_filter[T,:], Hermitian(Σ_filter[:,:,T])))
-        for t = (T-1):-1:1
-            X[t,:] = BackwardSim(X[t+1,:], μ_filter[t,:], Σ_filter[:,:,t], μ_pred[t+1,:],   
-                Σ_pred[:,:,t+1], A, t)
-        end
-
-        # Finally, sample state at t = 0
-        if sample_t0
-            x0 = BackwardSim(X[1,:], μ₀, Matrix(Σ₀), μ_pred[1,:], Σ_pred[:,:,1], A, 0)
-            Xdraws[:,:,i] = [x0'; X]
+    # Backward sampling for t = T-1, ..., 1
+    for t = (T-1):-1:1
+        mul!(AS, A, Σ_filter[:,:,t])
+        G .= (Σ_pred[:,:,t+1] \ AS)'
+        Σback = Hermitian(Σ_filter[:,:,t] - G * A * Σ_filter[:,:,t])
+        μback .= μ_filter[t,:] .+ G * (Xdraws[t+1+sample_t0,:,:] .- μ_pred[t+1,:])# n × nSim
+        if isposdef(Σback)
+            rand!(MvNormal(μ_zero, Σback), X) # exploit that Σback not a function of state
+            Xdraws[t+sample_t0,:,:] .= μback .+ X
         else
-            Xdraws[:,:,i] = X
+            Xdraws[t+sample_t0,:,:] .= Xdraws[t+1+sample_t0,:,:]
         end
-
     end
 
-    if size(Xdraws, 3) == 1
-        return Xdraws[:, :, 1] # Return a single draw as a T×n matrix
-    else
-        return Xdraws # Return all draws as a T×n×nIter array
+    # Sample at t = 0
+    if sample_t0
+        Σ₀mat = Matrix(Σ₀)   # outside would be better 
+        mul!(AS, A, Σ₀mat)
+        G .= (Σ_pred[:,:,1] \ AS)'
+        Σback = Hermitian(Σ₀mat - G * AS)
+        μback = μ₀ .+ G * (Xdraws[2,:,:] .- μ_pred[1,:])
+        if isposdef(Σback)
+            rand!(MvNormal(μ_zero, Σback), X)
+            Xdraws[1,:,:] .= μback .+ X
+        else
+            Xdraws[1,:,:] .= Xdraws[2,:,:]
+        end
     end
-    return Xdraws
 
 end
+
 
 
 
 """ 
-    Xdraws = FFBS(U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1) 
+    Xdraws = FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1) 
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the state space model:
@@ -82,10 +69,10 @@ The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
 A, C, Σₑ and Σₙ can be deterministically time-varying by passing 3D arrays of size n×n×T.
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nIter.
+Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS(U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
+function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
         filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -119,14 +106,13 @@ function FFBS(U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1;
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim;        
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
         sample_t0 = sample_t0)
 
     if filter_output
-        return Xdraws, μ_filter, Σ_filter
-    else
-        return Xdraws
+        return μ_filter, Σ_filter
     end
+    return nothing
 
 end
 
@@ -134,7 +120,7 @@ end
 
 
 """ 
-    FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
+    FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the state space model with nonlinear measurement equation:
@@ -157,10 +143,10 @@ The observed data observations are the rows of the T×k matrix Y
 The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nIter.
+Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1, maxIter = 1, 
+function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1, maxIter = 1, 
     tol = 1e-2, linesearch = false; filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -202,18 +188,18 @@ function FFBSx(U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1,
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
         sample_t0 = sample_t0)
+
     if filter_output
-        return Xdraws, μ_filter, Σ_filter
-    else
-        return Xdraws
+        return μ_filter, Σ_filter
     end
+    return nothing
 
 end
 
 """ 
-    FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
+    FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the state space model with nonlinear measurement equation:
@@ -236,10 +222,10 @@ The observed data observations are the rows of the T×k matrix Y
 The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nIter.
+Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
+function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
         α = 1, β = 0, κ = 0, filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -279,20 +265,19 @@ function FFBS_unscented(U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, nSim =
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
         sample_t0 = sample_t0)
 
     if filter_output
-        return Xdraws, μ_filter, Σ_filter
-    else
-        return Xdraws
+        return μ_filter, Σ_filter
     end
+    return nothing
 
 end
 
 
-function FFBS_SLR(U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, μ₀, Σ₀,
-        maxIter, nSim = 1; α = 1, β = 0, κ = 0, filter_output = false, 
+function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, 
+        μ₀, Σ₀, maxIter, nSim = 1; α = 1, β = 0, κ = 0, filter_output = false, 
         sample_t0 = true)
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
@@ -331,22 +316,21 @@ function FFBS_SLR(U, Y, A, B, condMean::Function, condCov::Function, param, Σ�
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    # Backward sampling for t = T, T-1, ..., 1
-    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
         sample_t0 = sample_t0)
 
     if filter_output
-        return Xdraws, μ_filter, Σ_filter
-    else
-        return Xdraws
+        return μ_filter, Σ_filter
     end
+    return nothing
 
 end
 
 
 
 """ 
-    FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; filter_output = false) 
+    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
+        filter_output = false) 
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the general state space model:
@@ -359,11 +343,12 @@ The observed data observations are the rows of the T×k matrix Y
 The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nIter.
+Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
-    filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100)
+function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
+    filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
+    nFailure = Ref(0))
 
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
@@ -385,22 +370,27 @@ function FFBS_laplace(U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
         #y = (r == 1) ? Y[t] : Y[t,:]
-        μ, Σ, μ̄, Σ̄ = laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, 
-            observation, θ, Σₙt, t, μ_init, max_iter)
+        filter_result = try
+            laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t, 
+                μ_init, max_iter)
+        catch
+            nFailure[] += 1
+            return nothing
+        end
+        μ, Σ, μ̄, Σ̄ = filter_result
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
         μ_pred[t,:] .= μ̄
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    Xdraws = BackwardSampling(μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
         sample_t0 = sample_t0)
 
     if filter_output
-        return Xdraws, μ_filter, Σ_filter
-    else
-        return Xdraws
+        return μ_filter, Σ_filter
     end
+    return nothing
 
 end
 

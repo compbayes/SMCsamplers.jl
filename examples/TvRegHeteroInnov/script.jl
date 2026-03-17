@@ -84,17 +84,17 @@ prior(θ) = MvNormal(θ.μ₀, θ.Σ₀)
 
 # ### PGAS 
 #First we use the prior as the proposal distribution for β₁ (which is the default)
-Nₚ = 20       # Number of particles
-Nₛ = 1000     # Number of samples from posterior
-PGASdraws_prior = PGASsampler(y, θ, Nₛ, Nₚ, prior, transition, observation) 
+nParticles = 20       # Number of particles
+nSim = 1000     # Number of samples from posterior
+PGASdraws_prior = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation) 
 PGASmean_prior = mean(PGASdraws_prior, dims = 3)[:,:,1]
 PGASquantiles_prior = quantile_multidim(PGASdraws_prior, [0.025, 0.975], dims = 3);
 
 #Plot update rates
-update_rate = sum(abs.(diff(PGASdraws_prior[:,1,:]; dims = 2)) .> 0; dims=2) / Nₛ
+update_rate = sum(abs.(diff(PGASdraws_prior[:,1,:]; dims = 2)) .> 0; dims=2) / nSim
 plt1 = plot(update_rate; label=false, ylim=[0, 1], legend=:bottomleft, xlabel="Iteration",
     ylabel="Update rate", title = "PGAS with prior as proposal")
-hline!([1 - 1 / Nₚ]; label="Optimal rate for N: $(Nₚ) particles", c = colors[3], 
+hline!([1 - 1 / nParticles]; label="Optimal rate for N: $(nParticles) particles", c = colors[3], 
     legend = :bottomright, lw = 1, linestyle = :dash)
 plt1
 # Note poor update rate for the early time steps. The prior is rather vague and is therefore not a good proposal for the state β₁.
@@ -111,7 +111,8 @@ B = 0.0
 U = zeros(T,1)
 Σₙ = Q; 
 
-FFBSdraws = FFBS(U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, Nₛ);
+FFBSdraws = zeros(T + 1, nState, nSim);
+FFBS!(FFBSdraws, U, y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim);
 FFBSmean = mean(FFBSdraws, dims = 3)[2:end,:,1] # Exclude initial state at t=0
 FFBSquantiles = quantile_multidim(FFBSdraws, [0.025, 0.975], dims = 3)[2:end,:,:];
 
@@ -130,7 +131,7 @@ for j in 1:p
     end
     #PGAS
     plot!(PGASmean_prior[:,j], lw = 1,
-        c = colors[j], linestyle = :solid, label = "PGAS(N=$Nₚ)")
+        c = colors[j], linestyle = :solid, label = "PGAS(N=$nParticles)")
     plot!(PGASquantiles_prior[:,j,1], fillrange = PGASquantiles_prior[:,j,2],
         fillalpha = 0.2, fillcolor = colors[j], linecolor = colors[j],
         label = "", lw = 0) 
@@ -150,15 +151,16 @@ nInit = 20
 Σₚ = PDMat(σ̂₀^2 * inv(Z[1:nInit,:]'*Z[1:nInit,:]))
 initproposal(θ) = MvNormal(μₚ, Σₚ) # This is the proposal for the state β₁
 
-PGASdraws = PGASsampler(y, θ, Nₛ, Nₚ, prior, transition, observation, initproposal); 
+PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation, 
+    initproposal); 
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 
 # The update rates are much better now
-update_rate = sum(abs.(diff(PGASdraws[:,1,:]; dims = 2)) .> 0; dims=2) / Nₛ
+update_rate = sum(abs.(diff(PGASdraws[:,1,:]; dims = 2)) .> 0; dims=2) / nSim
 plt2 = plot(update_rate; label=false, ylim=[0, 1], legend=:bottomleft, xlabel="Iteration",
     ylabel="Update rate", title = "PGAS with prior init proposal")
-hline!([1 - 1 / Nₚ]; label="Optimal rate for N: $(Nₚ) particles", c = colors[3], 
+hline!([1 - 1 / nParticles]; label="Optimal rate for N: $(nParticles) particles", c = colors[3], 
     legend = :bottomright, lw = 1, linestyle = :dash)
 plt2
 
@@ -176,7 +178,7 @@ for j in 1:p
     end
     #PGAS
     plot!(PGASmean[:,j], lw = 1,
-        c = colors[j], linestyle = :solid, label = "PGAS(N=$Nₚ)")
+        c = colors[j], linestyle = :solid, label = "PGAS(N=$nParticles)")
     plot!(PGASquantiles[:,j,1], fillrange = PGASquantiles[:,j,2],
         fillalpha = 0.2, fillcolor = colors[j], linecolor = colors[j],
         label = "", lw = 0) 
