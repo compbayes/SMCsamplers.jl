@@ -51,7 +51,7 @@ function SimTVReg(T, p, σₑ, Σₙ, μ = nothing, Φ = nothing, μ₀ = zeros(
     return y, Z, β, Q
 end
 
-p = 2      # State size
+p = nState = 2      # State size
 T = 500    # Number of observations
 σₑ = 1
 μ = -8*ones(p)
