@@ -276,6 +276,24 @@ function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀
 end
 
 
+""" 
+    FFBS_SLR!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
+        filter_output = false, sample_t0 = true) 
+
+Forward filtering using Statistical Linear Regression for linearizing, followed by backward sampling from the joint smoothing posterior: 
+p(x1,...xT | y1,...,yT) of the general state space model:
+
+yₜ ~ p(yₜ | xₜ)                     Measurement model
+
+xₜ ~ q(xₜ | xₜ₋₁)                   State transition model
+
+The observed data observations are the rows of the T×k matrix Y
+The control signals are the rows of the T×m matrix U
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+
+Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
+
+""" 
 function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, 
         μ₀, Σ₀, maxIter, nSim = 1; α = 1, β = 0, κ = 0, filter_output = false, 
         sample_t0 = true)

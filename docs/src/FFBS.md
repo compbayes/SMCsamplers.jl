@@ -1,6 +1,7 @@
 ```@docs
-FFBS
-FFBSx
-FFBS_unscented
-FFBS_laplace
+FFBS!
+FFBSx!
+FFBS_unscented!
+FFBS_SLR!
+FFBS_laplace!
 ```
