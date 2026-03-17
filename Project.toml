@@ -1,6 +1,6 @@
 name = "SMCsamplers"
 uuid = "2328efba-24c2-4a10-a32f-a74f69d05fca"
-version = "1.1.1"
+version = "1.1.2"
 authors = ["Mattias Villani"]
 
 [deps]
