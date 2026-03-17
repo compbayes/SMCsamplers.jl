@@ -1,7 +1,61 @@
+# nSim = 1 method: Xdraws is (T + sample_t0) × n matrix
+@views function BackwardSampling!(Xdraws::AbstractMatrix, μ_filter, Σ_filter, 
+        μ_pred, Σ_pred, A, μ₀, Σ₀; sample_t0 = true)
 
-@views function BackwardSampling!(Xdraws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀,
-        nSim = 1; sample_t0 = true)
+    T, n = size(μ_filter)
+    x     = zeros(n)
+    μback = zeros(n)
+    μ_zero = zeros(n)
+    AS    = zeros(n, n)
+    G     = zeros(n, n)
+
+    rand!(MvNormal(μ_filter[T,:], Hermitian(Σ_filter[:,:,T])), x)
+    Xdraws[T + sample_t0, :] .= x
+
+    for t = (T-1):-1:1
+        mul!(AS, A, Σ_filter[:,:,t])
+        G    .= (Σ_pred[:,:,t+1] \ AS)'
+        Σback = Hermitian(Σ_filter[:,:,t] - G * AS)
+        μback .= μ_filter[t,:] .+ G * (Xdraws[t+1+sample_t0,:] .- μ_pred[t+1,:])
+        if isposdef(Σback)
+            rand!(MvNormal(μ_zero, Σback), x)
+            Xdraws[t+sample_t0,:] .= μback .+ x
+        else
+            Xdraws[t+sample_t0,:] .= Xdraws[t+1+sample_t0,:]
+        end
+    end
+
+    if sample_t0
+        Σ₀mat = Matrix(Σ₀)
+        mul!(AS, A, Σ₀mat)
+        G    .= (Σ_pred[:,:,1] \ AS)'
+        Σback = Hermitian(Σ₀mat - G * AS)
+        μback .= μ₀ .+ G * (Xdraws[2,:] .- μ_pred[1,:])
+        if isposdef(Σback)
+            rand!(MvNormal(μ_zero, Σback), x)
+            Xdraws[1,:] .= μback .+ x
+        else
+            Xdraws[1,:] .= Xdraws[2,:]
+        end
+    end
+end
+
+# Thin wrapper: loop over sims and delegate to 2D
+# Not used, but may try it to avoid code duplication.
+function BackwardSamplingThin!(Xdraws::AbstractArray{<:Real,3}, μ_filter, Σ_filter, 
+        μ_pred, Σ_pred, A, μ₀, Σ₀, nSim = 1; sample_t0 = true)
+    for i = 1:nSim
+        BackwardSampling!(@view(Xdraws[:,:,i]), μ_filter, Σ_filter, μ_pred, Σ_pred, A, 
+            μ₀, Σ₀; sample_t0 = sample_t0)
+    end
+end
+
+# nSim > 1 method: Xdraws is (T + sample_t0) × n × nSim array — dispatch on AbstractArray
+@views function BackwardSampling!(Xdraws::AbstractArray{<:Real,3}, μ_filter, Σ_filter, 
+        μ_pred, Σ_pred, A, μ₀, Σ₀; sample_t0 = true)
+    
     T, n = size(μ_filter)   # T does not include t=0, n is the dim of state
+    nSim = size(Xdraws, 3)  # number of draws
     X = zeros(n, nSim)      # buffer, reused every t
     μback = zeros(n, nSim)
     μ_zero = zeros(n)       # pre-allocated zero mean for MvNormal
@@ -72,7 +126,7 @@ A, C, Σₑ and Σₙ can be deterministically time-varying by passing 3D arrays
 Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
-function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1; 
+function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀; 
         filter_output = false, sample_t0 = true)
 
     T = length(Y)   # Number of time steps
@@ -106,7 +160,7 @@ function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1;
         Σ_pred[:,:,t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀, nSim; 
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
         sample_t0 = sample_t0)
 
     if filter_output
