@@ -17,10 +17,10 @@
         G    .= (Σ_pred[:,:,t+1] \ AS)'
         Σback = Hermitian(Σ_filter[:,:,t] - G * AS)
         μback .= μ_filter[t,:] .+ G * (Xdraws[t+1+sample_t0,:] .- μ_pred[t+1,:])
-        if isposdef(Σback)
+        try
             rand!(MvNormal(μ_zero, Σback), x)
             Xdraws[t+sample_t0,:] .= μback .+ x
-        else
+        catch
             Xdraws[t+sample_t0,:] .= Xdraws[t+1+sample_t0,:]
         end
     end
@@ -31,17 +31,17 @@
         G    .= (Σ_pred[:,:,1] \ AS)'
         Σback = Hermitian(Σ₀mat - G * AS)
         μback .= μ₀ .+ G * (Xdraws[2,:] .- μ_pred[1,:])
-        if isposdef(Σback)
+        try
             rand!(MvNormal(μ_zero, Σback), x)
             Xdraws[1,:] .= μback .+ x
-        else
+        catch
             Xdraws[1,:] .= Xdraws[2,:]
         end
     end
 end
 
 # Thin wrapper: loop over sims and delegate to 2D
-# Not used, but may try it to avoid code duplication.
+# Not used, but may try it to avoid code duplication. Slower though
 function BackwardSamplingThin!(Xdraws::AbstractArray{<:Real,3}, μ_filter, Σ_filter, 
         μ_pred, Σ_pred, A, μ₀, Σ₀, nSim = 1; sample_t0 = true)
     for i = 1:nSim
@@ -72,10 +72,10 @@ end
         G .= (Σ_pred[:,:,t+1] \ AS)'
         Σback = Hermitian(Σ_filter[:,:,t] - G * A * Σ_filter[:,:,t])
         μback .= μ_filter[t,:] .+ G * (Xdraws[t+1+sample_t0,:,:] .- μ_pred[t+1,:])# n × nSim
-        if isposdef(Σback)
+        try
             rand!(MvNormal(μ_zero, Σback), X) # exploit that Σback not a function of state
             Xdraws[t+sample_t0,:,:] .= μback .+ X
-        else
+        catch
             Xdraws[t+sample_t0,:,:] .= Xdraws[t+1+sample_t0,:,:]
         end
     end
@@ -87,10 +87,10 @@ end
         G .= (Σ_pred[:,:,1] \ AS)'
         Σback = Hermitian(Σ₀mat - G * AS)
         μback = μ₀ .+ G * (Xdraws[2,:,:] .- μ_pred[1,:])
-        if isposdef(Σback)
+        try
             rand!(MvNormal(μ_zero, Σback), X)
             Xdraws[1,:,:] .= μback .+ X
-        else
+        catch
             Xdraws[1,:,:] .= Xdraws[2,:,:]
         end
     end

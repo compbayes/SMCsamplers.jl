@@ -334,7 +334,6 @@ function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σ�
             logpdf(MvNormal(μ̄[:], Ω̄), x)
         laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)  # Initial guess 
     catch
-        println("Ω̄: "); display(Ω̄)
         println("the prior var is:"); display(diag(Ω̄))
         error("Laplace approximation failed at time $t")
     end
