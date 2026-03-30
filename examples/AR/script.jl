@@ -106,8 +106,7 @@ nSim = 1000;            # Number of samples from posterior
 # ### PGAS sampling
 nParticles = 100         # Number of particles for PGAS
 sample_t0 = true         # Sample state at t=0 ?
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, 
-    observation);
+PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation);
 PGASdraws = restr.(PGASdraws) # Apply the restriction to the draws
 PGASmedian = median(PGASdraws, dims = 3)[:,:,1];
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
@@ -127,7 +126,7 @@ for j = 1:nState
         label = "PGAS(N=$nParticles)")
     push!(plt, plt_tmp)
 end
-plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "time", 
+plot(plt..., layout = (1,2), size = (1400, 600), ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
 
 # ### Set up the state space model for FFBS sampling with EKF, UKF etc
@@ -161,7 +160,7 @@ for j = 1:nState
     plot!(plt[j], timevect, EKFquantiles[:,j,2], lw = 1, c = colors[3], 
         linestyle = :solid, label = nothing)
 end
-plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "time", 
+plot(plt..., layout = (1,2), size = (1400, 600), ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
 
 
@@ -181,7 +180,7 @@ for j = 1:nState
     plot!(plt[j], timevect, UKFquantiles[:,j,2], lw = 1, c = colors[2], 
         linestyle = :solid, label = nothing)
 end
-plot(plt..., layout = (1,2), size = (800, 350),  ylims = (-1.7,1.7), xlabel = "time", 
+plot(plt..., layout = (1,2), size = (1400, 600),  ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
 
 
@@ -204,7 +203,7 @@ if plotIEKF
         plot!(plt[j], timevect, IEKFquantiles[:,j,2], lw = 1, c = colors[4], 
             linestyle = :solid, label = nothing)
     end
-    plot(plt..., layout = (1,2), size = (800, 300), ylims = (-1.7,1.7), xlabel = "time", 
+    plot(plt..., layout = (1,2), size = (1400, 600), ylims = (-1.7,1.7), xlabel = "time", 
         bottommargin = 5mm)
 end
 
@@ -256,3 +255,28 @@ if plotLaplace
         bottommargin = 5mm)
 end
 println("Laplace failed at $(100*nFailure[]/nSim)% of the simulated trajectories") 
+
+# ### Monte Carlo approximation with FFBS
+plotMonteCarlo = true
+if plotMonteCarlo
+    nMonteCarlo = 1000
+    nFailure = Ref(0) # Persistent counter that gets updated when failures occur
+    MCDraws = zeros(T + sample_t0, nState, nSim)
+    μ_filterMC, Σ_filterMC = FFBS_montecarlo!(MCDraws, U, Y, A, B, Σₙ, 
+        μ₀, Σ₀, observation, θ; filter_output = true, nMC = nMonteCarlo, 
+        nFailure = nFailure);
+    MCDraws = restr.(MCDraws) # Apply the restriction to the draws
+    MCmedian = median(MCDraws, dims = 3)[:,:,1];
+    MCquantiles = quantile_multidim(MCDraws, [0.025, 0.975], dims = 3);
+    for j = 1:nState
+        plot!(plt[j], timevect, MCmedian[:,j], lw = 1, c = :black, 
+            linestyle = :solid, label = "Monte Carlo (N = $nMonteCarlo)")
+        plot!(plt[j], timevect, MCquantiles[:,j,1], lw = 1, c = :black, 
+            linestyle = :solid, label = nothing)
+        plot!(plt[j], timevect, MCquantiles[:,j,2], lw = 1, c = :black, 
+            linestyle = :solid, label = nothing)
+    end
+    plot(plt..., layout = (1,2), size = (1400, 600), ylims = (-1.7,1.7), xlabel = "time", 
+        bottommargin = 5mm)
+end
+println("Monte Carlo failed at $(100*nFailure[]/nSim)% of the simulated trajectories") 

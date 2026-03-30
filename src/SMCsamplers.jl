@@ -10,10 +10,10 @@ export NewtonRaphson
 include("KalmanFilters.jl")
 export kalmanfilter_update, kalmanfilter_update_extended, kalmanfilter_update_unscented
 export kalmanfilter_update_extended_iter, kalmanfilter_update_extended_iter_line
-export kalmanfilter_update_IPLF
+export kalmanfilter_update_IPLF, kalmanfilter_update_montecarlo
 
 include("FFBSsamplers.jl")
-export FFBS!, FFBSx!, FFBS_unscented!, FFBS_SLR!, FFBS_laplace!
+export FFBS!, FFBSx!, FFBS_unscented!, FFBS_SLR!, FFBS_laplace!, FFBS_montecarlo!
 
 include("ParticleGibbsSamplers.jl")
 export PGASsimulate!, PGASsampler

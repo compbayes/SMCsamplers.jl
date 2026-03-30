@@ -331,8 +331,8 @@ end
 
 
 """ 
-    FFBS_SLR!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
-        filter_output = false, sample_t0 = true) 
+    FFBS_SLR!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+        filter_output = false, sample_t0 = true, nFailure = Ref(0)) 
 
 Forward filtering using Statistical Linear Regression for linearizing, followed by backward sampling from the joint smoothing posterior: 
 p(x1,...xT | y1,...,yT) of the general state space model:
@@ -345,12 +345,11 @@ The observed data observations are the rows of the T×k matrix Y
 The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
 function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, 
         μ₀, Σ₀, maxIter; α = 1, β = 0, κ = 0, filter_output = false, 
-        sample_t0 = true)
+        sample_t0 = true, nFailure = Ref(0))
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
     q = size(U,2)   # Dimension of the control vector
@@ -377,10 +376,14 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
         At = staticA ? A : @view A[:,:,t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t,:]
-        μ, Σ, μ̄, Σ̄ = kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov, 
-            param,  Σₙt, t, maxIter, γ ,ωₘ, ωₛ)
-
-        #println("Time step: ", t, " Mean: ", μ, " Covariance: ", Σ)
+        filter_result = try
+            kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov, 
+                param,  Σₙt, t, maxIter, γ ,ωₘ, ωₛ)
+        catch
+            nFailure[] += 1
+            return nothing
+        end
+        μ, Σ, μ̄, Σ̄ = filter_result
         
         μ_filter[t,:] .= μ
         Σ_filter[:,:,t] .= Σ
@@ -401,8 +404,9 @@ end
 
 
 """ 
-    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, nSim = 1; 
-        filter_output = false) 
+    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+        filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
+        nFailure = Ref(0)) 
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the general state space model:
@@ -414,8 +418,6 @@ xₜ ~ p(xₜ | xₜ₋₁)                   State transition model
 The observed data observations are the rows of the T×k matrix Y
 The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
-
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
 
 """ 
 function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
@@ -445,6 +447,70 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         filter_result = try
             laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t, 
                 μ_init, max_iter)
+        catch
+            nFailure[] += 1
+            return nothing
+        end
+        μ, Σ, μ̄, Σ̄ = filter_result
+        μ_filter[t,:] .= μ
+        Σ_filter[:,:,t] .= Σ
+        μ_pred[t,:] .= μ̄
+        Σ_pred[:,:,t] .= Σ̄
+    end
+
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
+        sample_t0 = sample_t0)
+
+    if filter_output
+        return μ_filter, Σ_filter
+    end
+    return nothing
+
+end
+
+
+""" 
+    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+        filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
+        nFailure = Ref(0)) 
+
+Forward filtering and backward sampling from the joint smoothing posterior 
+p(x1,...xT | y1,...,yT) of the general state space model:
+
+yₜ ~ p(yₜ | xₜ)                     Measurement model
+
+xₜ ~ p(xₜ | xₜ₋₁)                   State transition model
+
+The observed data observations are the rows of the T×k matrix Y
+The control signals are the rows of the T×m matrix U
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+
+""" 
+function FFBS_montecarlo!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+    filter_output = false, sample_t0 = true, nMC = 1000, nFailure = Ref(0))
+
+    T = length(Y)   # Number of time steps
+    n = length(μ₀)  # Dimension of the state vector  
+    #r = size(Y,2)   # Dimension of the observed data vector
+    q = size(U,2)   # Dimension of the control vector
+    staticA = (ndims(A) == 3) ? false : true
+    staticΣₙ = (ndims(Σₙ) == 3  || eltype(Σₙ) <: PDMat) ? false : true
+
+    # Run Kalman filter and collect matrices
+    μ_filter = zeros(T, n)      # Storage of μₜₜ
+    Σ_filter = zeros(n, n, T)   # Storage of Σₜₜ
+    μ_pred = zeros(T, n)        # Storage of μₜ,ₜ₋₁
+    Σ_pred = zeros(n, n, T)     # Storage of Σₜ,ₜ₋₁
+
+    μ = deepcopy(μ₀)
+    Σ = deepcopy(Σ₀)
+    for t = 1:T
+        At = staticA ? A : @view A[:,:,t]
+        Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
+        u = (q == 1) ? U[t] : U[t,:]
+        filter_result = try
+            kalmanfilter_update_montecarlo(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t, 
+                nMC)
         catch
             nFailure[] += 1
             return nothing

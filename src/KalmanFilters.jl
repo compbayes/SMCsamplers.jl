@@ -286,9 +286,9 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         Kₖ = try
             Ω̄ * Aₖ' / Sₖ 
         catch
-            println("Ω̄ = ");display(Ω̄)
-            println("Sₖ = ");display(Sₖ)
-            println("Aₖ = ");display(Aₖ)
+            #println("Ω̄ = ");display(Ω̄)
+            #println("Sₖ = ");display(Sₖ)
+            #println("Aₖ = ");display(Aₖ)
             error("Kalman gain computation failed at iteration $i")
         end
         
@@ -334,10 +334,8 @@ function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σ�
             logpdf(MvNormal(μ̄[:], Ω̄), x)
         laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)  # Initial guess 
     catch
-        println("the prior var is:"); display(diag(Ω̄))
         error("Laplace approximation failed at time $t")
     end
-    #println("the prior var at time t = $t is:"); display(diag(Ω̄)')
 
     return μ, Ω, μ̄, Ω̄
 end
@@ -385,3 +383,34 @@ function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_i
 
 end
 
+
+function kalmanfilter_update_montecarlo(μ, Ω, u, y, A, B, observation, param,  Σₙ, t, nMC)
+
+    ### Prior propagation
+    μ̄ = A*μ .+ B*u
+    Ω̄ = A*Ω*A' + Σₙ   
+
+    ### Measurement update
+
+    ## Generate Monte Carlo draws from from prior propagated distribution N(μ̄, Ω̄)
+    StateDraws = rand(MvNormal(μ̄[:], Hermitian(Ω̄)), nMC) # n × nMC matrix from N(μ̄, Ω̄)
+    ObsDraws = zeros(length(y), nMC) # k × nMC matrix with sim observation data
+    for j in 1:size(StateDraws, 2)
+        ObsDraws[:,j] .= rand(observation(param, StateDraws[:,j], t)) 
+    end
+
+    ## Compute mean and covariance between state and measurements from MC draws
+    μₒ = mean(ObsDraws, dims = 2)[:]
+    Ωₒ = cov(ObsDraws')
+    Ωₛₒ = cov(StateDraws', ObsDraws')
+    K = try 
+        Ωₛₒ / Ωₒ
+    catch
+        error("Kalman gain computation failed at time $t")
+    end
+    μ = μ̄ + K*(y .- μₒ)
+    Ω = Ω̄ - K*Ωₒ*K' 
+
+    return μ, Ω, μ̄, Ω̄
+
+end

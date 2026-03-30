@@ -15,7 +15,7 @@ Xref is a T×p matrix with conditioning particle path - if nothing, unconditiona
 If sample_t0 is true, then sample also a t=0.
 """ 
 function PGASsimulate!(X, y, p, N, param, prior, transition, observation,  
-    initproposal, resampler, Xref = nothing; sample_t0 = true) 
+    initproposal, resampler, Xref = nothing; sample_t0 = true, nFailure = Ref(0)) 
 
     conditioning = !isnothing(Xref)
     T = length(y)
@@ -28,96 +28,101 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
     logweights = zeros(N)
     ESSthreshold = 0.5*N
     ResampleCount = 0
-    for t  = 1:T
-        if t == 1
-            for n in 1:N
-                X[n,:,t] .= rand(initproposal)
-            end  
-            if conditioning
-                X[N,:,t] = Xref[t,:]; # Last particle set to the reference particle
-            end
+    try 
+        for t  = 1:T
+            if t == 1
+                for n in 1:N
+                    X[n,:,t] .= rand(initproposal)
+                end  
+                if conditioning
+                    X[N,:,t] = Xref[t,:]; # Last particle set to the reference particle
+                end
 
-            # Compute importance weights
-            for n in 1:N
-                x = @view X[n,:,t] # Particle state at time t
-                if sample_t0
-                    logweights[n] = logpdf(prior, (p==1) ? x[1] : x) - 
-                        logpdf(initproposal, (p==1) ? x[1] : x)
+                # Compute importance weights
+                for n in 1:N
+                    x = @view X[n,:,t] # Particle state at time t
+                    if sample_t0
+                        logweights[n] = logpdf(prior, (p==1) ? x[1] : x) - 
+                            logpdf(initproposal, (p==1) ? x[1] : x)
+                    else
+                      logweights[n]=logpdf(observation(param,(p==1) ? x[1] : x, t), y[t]) + 
+                            logpdf(prior, (p==1) ? x[1] : x) - 
+                            logpdf(initproposal, (p==1) ? x[1] : x)
+                    end
+                end
+
+                weights = exp.(logweights .- maximum(logweights))
+                w[:,t] = weights/sum(weights) # Save the normalized weights
+
+                ind = collect(1:N)
+            else # t ≥ 2
+
+                # Resampling
+                resample = (ESS(w[:,t-1]) <= ESSthreshold)
+                if resample
+                    ResampleCount += 1
+                    ind .= resampler(w[:,t-1])
                 else
-                    logweights[n] = logpdf(observation(param, (p==1) ? x[1] : x, t), y[t])+ 
-                        logpdf(prior, (p==1) ? x[1] : x) - 
-                        logpdf(initproposal, (p==1) ? x[1] : x)
+                    ind .= 1:N # no resampling
                 end
-            end
-
-            weights = exp.(logweights .- maximum(logweights))
-            w[:,t] = weights/sum(weights) # Save the normalized weights
-
-            ind = collect(1:N)
-        else # t ≥ 2
-
-            # Resampling
-            resample = (ESS(w[:,t-1]) <= ESSthreshold)
-            if resample
-                ResampleCount += 1
-                ind .= resampler(w[:,t-1])
-            else
-                ind .= 1:N # no resampling
-            end
-             
-            # Ancestor sampling
-            if conditioning
-                for n = 1:N 
-                    x = @view X[n,:,t-1]
-                    xref = @view Xref[t,:]
-                    γ[n] = logpdf(transition(param, (p==1) ? x[1] : x, t-sample_t0), 
-                        (p==1) ? xref[1] : xref)
+                
+                # Ancestor sampling
+                if conditioning
+                    for n = 1:N 
+                        x = @view X[n,:,t-1]
+                        xref = @view Xref[t,:]
+                        γ[n] = logpdf(transition(param, (p==1) ? x[1] : x, t-sample_t0), 
+                            (p==1) ? xref[1] : xref)
+                    end
+                    w_as = w[:,t-1] .* exp.(γ .- maximum(γ))
+                    w_as = w_as/sum(w_as)
+                    ind[N] = findfirst(rand(1) .<= cumsum(w_as))
                 end
-                w_as = w[:,t-1] .* exp.(γ .- maximum(γ))
-                w_as = w_as/sum(w_as)
-                ind[N] = findfirst(rand(1) .<= cumsum(w_as))
+                if resample
+                    w[:,t-1] .= 1/N
+                end
+
+                # Store the ancestor indices
+                a[:,t] = ind;
+
+                # Propagate particles - bootstrap proposal
+                for n in 1:N 
+                    x = @view X[ind[n],:,t-1] 
+                    X[n,:,t] .= rand(transition(param, (p==1) ? x[1] : x, t-sample_t0))
+                end 
+                if conditioning
+                    @views X[N,:,t] = Xref[t,:]; # Set the N:th particle to the conditioning
+                end
+
+                # Compute importance weights
+                for n in 1:N
+                    x = @view X[n,:,t]
+                    logweights[n] = logpdf(observation(param, (p==1) ? x[1] : x, t-sample_t0), 
+                        y[t-sample_t0]) 
+                end
+
+                weights = w[:,t-1] .* exp.(logweights .- maximum(logweights))
+
+                w[:,t] = weights/sum(weights) # Save the normalized weights
             end
-            if resample
-                w[:,t-1] .= 1/N
-            end
-
-            # Store the ancestor indices
-            a[:,t] = ind;
-
-            # Propagate particles - bootstrap proposal
-            for n in 1:N 
-                x = @view X[ind[n],:,t-1] 
-                X[n,:,t] .= rand(transition(param, (p==1) ? x[1] : x, t-sample_t0))
-            end 
-            if conditioning
-                @views X[N,:,t] = Xref[t,:]; # Set the N:th particle to the conditioning
-            end
-
-            # Compute importance weights
-            for n in 1:N
-                x = @view X[n,:,t]
-                logweights[n] = logpdf(observation(param, (p==1) ? x[1] : x, t-sample_t0), 
-                    y[t-sample_t0]) 
-            end
-
-            weights = w[:,t-1] .* exp.(logweights .- maximum(logweights))
-
-            w[:,t] = weights/sum(weights) # Save the normalized weights
+            
         end
-        
-    end
 
-    #println("Fraction resampling steps: $(ResampleCount/(T-1))")
+        #println("Fraction resampling steps: $(ResampleCount/(T-1))")
 
-    # Generate the trajectories from ancestor indices
-    ind = a[:,T];
-    for t = (T-1):-1:1
-        X[:,:,t] = X[ind,:,t]
-        ind = a[ind,t]
+        # Generate the trajectories from ancestor indices
+        ind = a[:,T];
+        for t = (T-1):-1:1
+            X[:,:,t] = X[ind,:,t]
+            ind = a[ind,t]
+        end
+        # Finally, sample a trajectory and return it
+        J = findfirst(rand(1) .<= cumsum(w[:,T]))   
+        return X[J,:,:]' 
+    catch
+        nFailure[] += 1
+        return Xref
     end
-    # Finally, sample a trajectory and return it
-    J = findfirst(rand(1) .<= cumsum(w[:,T]))   
-    return X[J,:,:]'
 
 end
 
@@ -146,10 +151,11 @@ function PGASsampler(y, param, nDraws, N, prior, transition, observation,
     T = length(y)
     Xdraws = zeros(sample_t0 + T, p, nDraws)
     X = zeros(N, p, T + sample_t0)
+    nFailure = Ref(0)
 
     # Initialize the state by running a PF
     Xdraw = PGASsimulate!(X, y, p, N, param, prior, transition, observation, 
-        initproposal, resampler; sample_t0 = sample_t0)
+        initproposal, resampler; sample_t0 = sample_t0, nFailure = nFailure)
         
     Xdraws[:,:,1] = Xdraw
 
@@ -157,11 +163,11 @@ function PGASsampler(y, param, nDraws, N, prior, transition, observation,
     for k = 2:nDraws 
         # Sample the states using PGAS
         Xdraw = PGASsimulate!(X, y, p, N, param, prior, transition, observation, 
-            initproposal, resampler, Xdraw; sample_t0 = sample_t0)    
+            initproposal, resampler, Xdraw; sample_t0 = sample_t0, nFailure = nFailure)    
         Xdraws[:,:,k] = Xdraw      
     end
 
-    return Xdraws#permutedims(Xdraws, [2,1,3]) # returns T×p×nDraws array
+    return Xdraws, nFailure#permutedims(Xdraws, [2,1,3]) # returns T×p×nDraws array
 
 end 
 
