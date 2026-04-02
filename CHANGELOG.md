@@ -5,6 +5,8 @@
 - Try-catch to make the FFBS sampler based on IPLF more robust
 - Added a Monte Carlo version of the Gaussian approximation filters
 - Created the CHANGELOG.md (this file)
+- Added a .JuliaFormatter.toml for formatting the code.
+
 
 ## [1.1.4] - 2026-03-19
 ### Added
