@@ -58,7 +58,7 @@ plot(plt1, plt2, layout = (2,1))
 # ### PGAS sampling
 nParticles = 20         # Number of particles for PGAS
 nSim = 1000       # Number of samples from posterior
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
     

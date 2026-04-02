@@ -86,7 +86,8 @@ prior(θ) = MvNormal(θ.μ₀, θ.Σ₀)
 #First we use the prior as the proposal distribution for β₁ (which is the default)
 nParticles = 20       # Number of particles
 nSim = 1000     # Number of samples from posterior
-PGASdraws_prior = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation) 
+PGASdraws_prior, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, 
+    observation) 
 PGASmean_prior = mean(PGASdraws_prior, dims = 3)[:,:,1]
 PGASquantiles_prior = quantile_multidim(PGASdraws_prior, [0.025, 0.975], dims = 3);
 
@@ -151,7 +152,7 @@ nInit = 20
 Σₚ = PDMat(σ̂₀^2 * inv(Z[1:nInit,:]'*Z[1:nInit,:]))
 initproposal(θ) = MvNormal(μₚ, Σₚ) # This is the proposal for the state β₁
 
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation, 
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation, 
     initproposal); 
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);

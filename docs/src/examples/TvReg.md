@@ -92,7 +92,7 @@ observation(θ, state, t) = Normal(θ.Z[t,:] ⋅ state, θ.σₑ)
 ````julia
 nParticles = 20       # Number of particles
 nSim = 1000     # Number of samples from posterior
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);
 ````

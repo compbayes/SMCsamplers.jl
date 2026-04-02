@@ -1473,7 +1473,7 @@ version = "0.7.0"
 deps = ["BenchmarkTools", "CSV", "Distributions", "ForwardDiff", "LaTeXStrings", "LineSearches", "LinearAlgebra", "Literate", "Measures", "Optim", "PDMats", "PProf", "Plots", "Profile", "Random", "Revise", "Statistics", "Utils"]
 path = "/home/mv/.julia/dev/SMCsamplers/docs/.."
 uuid = "2328efba-24c2-4a10-a32f-a74f69d05fca"
-version = "1.1.4"
+version = "1.2.0"
 
 [[deps.Scratch]]
 deps = ["Dates"]

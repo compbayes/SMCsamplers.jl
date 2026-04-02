@@ -106,7 +106,7 @@ nSim = 1000;            # Number of samples from posterior
 # ### PGAS sampling
 nParticles = 100         # Number of particles for PGAS
 sample_t0 = true         # Sample state at t=0 ?
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation);
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation);
 PGASdraws = restr.(PGASdraws) # Apply the restriction to the draws
 PGASmedian = median(PGASdraws, dims = 3)[:,:,1];
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);

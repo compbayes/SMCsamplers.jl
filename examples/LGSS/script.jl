@@ -63,7 +63,7 @@ plot!(y; seriestype=:scatter, label="observed, y", xlabel="t", markersize = 2,
 nParticles = 20             # Number of particles for PGAS
 nSim = 10000;         # Number of samples from posterior
 sample_t0 = false    # Sample state at t=0 ?
-PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation; 
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition, observation; 
     sample_t0 = sample_t0)
 PGASmean = mean(PGASdraws, dims = 3)[:,:,1]
 PGASquantiles = quantile_multidim(PGASdraws, [0.025, 0.975], dims = 3);

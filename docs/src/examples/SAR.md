@@ -147,7 +147,7 @@ nSim = 3000;            # Number of samples from posterior
 ````julia
 nParticles = 100        # Number of particles for PGAS
 sample_t0 = true        # Sample state at t=0 ?
-@time PGASdraws = PGASsampler(y, θ, nSim, nParticles, prior, transition,
+PGASdraws, nFailure = PGASsampler(y, θ, nSim, nParticles, prior, transition,
     observation; sample_t0 = sample_t0);
 PGASdraws = restr.(PGASdraws) # Apply the restriction to the draws
 PGASmedian = median(PGASdraws, dims = 3)[:,:,1];
