@@ -420,7 +420,7 @@ The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
 """ 
-function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+function FFBS_laplace_no!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
     filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
     nFailure = Ref(0))
 
@@ -468,6 +468,60 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
 
 end
 
+function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ,FisherInfo,Svec; 
+    filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
+    nFailure = Ref(0))
+
+    T = length(Y)   # Number of time steps
+
+    n = length(μ₀)  # Dimension of the state vector  
+    #r = size(Y,2)   # Dimension of the observed data vector
+    q = size(U,2)   # Dimension of the control vector
+    staticA = (ndims(A) == 3) ? false : true
+    staticΣₙ = (ndims(Σₙ) == 3  || eltype(Σₙ) <: PDMat) ? false : true
+
+    # Run Kalman filter and collect matrices
+    μ_filter = zeros(T, n)      # Storage of μₜₜ
+    Σ_filter = zeros(n, n, T)   # Storage of Σₜₜ
+    μ_pred = zeros(T, n)        # Storage of μₜ,ₜ₋₁
+    Σ_pred = zeros(n, n, T)     # Storage of Σₜ,ₜ₋₁
+
+    μ = deepcopy(μ₀)
+    Σ = deepcopy(Σ₀)
+    for t = 1:T
+
+        S = FisherInfo(θ, μ, t)
+        Svec[:,:,t] .= S
+
+        At = staticA ? A : @view A[:,:,t]
+        Σₙt = staticΣₙ ? S * Σₙ * S : S * Σₙ[t] * S
+        u = (q == 1) ? U[t] : U[t,:]
+        #y = (r == 1) ? Y[t] : Y[t,:]
+        filter_result = try
+            laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t, 
+                μ_init, max_iter)
+        catch
+            nFailure[] += 1
+            return nothing
+        end
+        μ, Σ, μ̄, Σ̄ = filter_result
+        μ_filter[t,:] .= μ 
+        Σ_filter[:,:,t] .=  Σ
+        μ_pred[t,:] .= μ̄
+        Σ_pred[:,:,t] .= Σ̄
+
+    end
+
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
+        sample_t0 = sample_t0)
+
+
+   if filter_output
+    return μ_filter, Σ_filter
+   end
+    return nothing
+
+end
 
 """ 
     FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
