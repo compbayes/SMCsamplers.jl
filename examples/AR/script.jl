@@ -129,7 +129,7 @@ end
 plot(plt..., layout = (1,2), size = (1400, 600), ylims = (-1.7,1.7), xlabel = "time", 
     bottommargin = 5mm)
 
-# ### Set up the state space model for FFBS sampling with EKF, UKF etc
+# ### Set up the state space model for FFBS sampling with EKF, UKF etc.
 A = PDMat(I(nState))
 B = zeros(nState)
 U = zeros(T,1)
