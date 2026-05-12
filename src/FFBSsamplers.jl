@@ -420,7 +420,7 @@ The control signals are the rows of the T×m matrix U
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
 
 """ 
-function FFBS_laplace_no!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
     filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
     nFailure = Ref(0))
 
