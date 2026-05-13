@@ -427,7 +427,7 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
     Σ = deepcopy(Σ₀)
 
     for t = 1:T 
-        S = FisherInfo(θ, μ, t)
+        S = FisherInfo(param, μ, t)
         Svec[:,:,t] .= S
 
         At = staticA ? A : @view A[:,:,t]
