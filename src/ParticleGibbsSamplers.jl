@@ -15,13 +15,14 @@ Xref is a T×p matrix with conditioning particle path - if nothing, unconditiona
 If sample_t0 is true, then sample also a t=0.
 """ 
 function PGASsimulate!(X, y, p, N, param, prior, transition, observation,  
-    initproposal, resampler, Spgas, FisherInfo, Xref = nothing; sample_t0 = true, nFailure = Ref(0)) 
+    initproposal, resampler, Xref, Svec, FisherInfo; sample_t0 = true, nFailure = Ref(0)) 
 
     conditioning = !isnothing(Xref)
     T = length(y)
     if sample_t0
         T = T + 1 # t = 1 now really corresponds to t=0 in y
     end
+    Spgas = zeros(p,p,T,N)
     a = zeros(Int, N, T)    # Ancestor indices
     w = zeros(N, T)         # Weights
     γ = zeros(N)
@@ -57,6 +58,9 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
                 ind = collect(1:N)
             else # t ≥ 2
 
+                for n in 1:N
+                    Spgas[:,:,t,n] = FisherInfo(param, x, t-sample_t0)
+                end
 
                 # Resampling
                 resample = (ESS(w[:,t-1]) <= ESSthreshold)
@@ -71,7 +75,6 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
                 if conditioning
                     for n = 1:N 
                         x = @view X[n,:,t-1]
-                        Spgas[:,:,t,n] = FisherInfo(param, x, t-1)
                         xref = @view Xref[t,:]
                         γ[n] = logpdf(transition(Spgas[:,:,t,n], param, (p==1) ? x[1] : x, t-sample_t0), 
                             (p==1) ? xref[1] : xref)
@@ -117,13 +120,14 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
         ind = a[:,T];
         for t = (T-1):-1:1
             X[:,:,t] = X[ind,:,t]
-            Spags[:,:,t,:] = Spags[:,:,t,ind]
+            Spgas[:,:,t,:] = Spgas[:,:,t,ind]
             ind = a[ind,t]
         end
         # Finally, sample a trajectory and return it
         J = findfirst(rand(1) .<= cumsum(w[:,T]))
 
-        return X[J,:,:]' , Spags[:,:,:,J]
+        Svec = Spgas[:,:,:,J]
+        return X[J,:,:]' 
     catch
         nFailure[] += 1
         return Xref
