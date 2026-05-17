@@ -15,7 +15,7 @@ Xref is a T×p matrix with conditioning particle path - if nothing, unconditiona
 If sample_t0 is true, then sample also a t=0.
 """ 
 function PGASsimulate!(X, y, p, N, param, prior, transition, observation,  
-    initproposal, resampler, Xref, Svec, FisherInfo; sample_t0 = true, nFailure = Ref(0)) 
+    initproposal, resampler, Xref, FisherInfo, Svec; sample_t0 = true, nFailure = Ref(0)) 
 
     conditioning = !isnothing(Xref)
     T = length(y)
@@ -59,7 +59,7 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
             else # t ≥ 2
 
                 for n in 1:N
-                    Spgas[:,:,t,n] = FisherInfo(param, x, t-sample_t0)
+                    Spgas[:,:,t,n] = FisherInfo(param, X[n,:,t-1], t-sample_t0)
                 end
 
                 # Resampling
@@ -126,8 +126,10 @@ function PGASsimulate!(X, y, p, N, param, prior, transition, observation,
         # Finally, sample a trajectory and return it
         J = findfirst(rand(1) .<= cumsum(w[:,T]))
 
-        Svec = Spgas[:,:,:,J]
-        return X[J,:,:]' 
+        Svec = Spgas[:,:,2:end,J]
+
+        
+        return X[J,:,:]' , Svec
     catch
         nFailure[] += 1
         return Xref
