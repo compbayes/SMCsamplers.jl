@@ -23,4 +23,3 @@ export systematic, multinomial, ESS # TODO: add stratified resampling
 export KLD, splitEqualGroups
 
 end
-  
