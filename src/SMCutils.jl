@@ -41,11 +41,10 @@ end
 function splitEqualGroups(y, X, covSel, nPerGroup)
     nParamObs = length(covSel) # number of parameters in observation model
     nElements = length(y)
-    nGroups = ceil(Int, nElements / nPerGroup)
     Y = Vector{Vector{eltype(y)}}()
     Z = Vector(undef, nParamObs)    # Z[j] holds the covariates in j:th obs model parameter
     for j in 1:nParamObs
-        if !isempty(covSel[j]) && !isnothing(covSel[j])
+        if !isnothing(covSel[j]) && !isempty(covSel[j])
             Z[j] = Vector{Matrix{eltype(X)}}()
         else
             Z[j] = nothing
@@ -77,11 +76,10 @@ function splitEqualGroups(y, X, nPerGroup)
         X = [X]  # artificially wrap X in a vector. Code below now works for both cases
     end
     nElements = length(y)
-    nGroups = ceil(Int, nElements / nPerGroup)
     Y = Vector{Vector{eltype(y)}}()
     Z = Vector(undef, nParamObs)    # Z[j] holds the covariates in j:th obs model parameter
     for j in 1:nParamObs
-        if !isempty(X[j]) && !isnothing(X[j])
+        if !isnothing(X[j]) && !isempty(X[j])
             Z[j] = Vector{Matrix{eltype(X[j])}}()
         else
             Z[j] = nothing
