@@ -61,9 +61,7 @@ function splitEqualGroups(y, X, covSel, nPerGroup)
         i += nPerGroup
     end
     groupSizes = length.(Y)
-    if nParamObs == 1 # back to original format if only one parameter in obs model
-        Z = Z[1]
-    end
+
     return Y, Z, groupSizes
 end
 
