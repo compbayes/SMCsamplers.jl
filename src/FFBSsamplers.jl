@@ -420,7 +420,7 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
         Svec[:,:,t] .= S
 
         At = staticA ? A : @view A[:,:,t]
-        Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S): Hermitian(S * Σₙ[t] * S)
+        Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S)
         u = (q == 1) ? U[t] : U[t,:]
         filter_result = try
             kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov, 
