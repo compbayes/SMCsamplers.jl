@@ -42,14 +42,7 @@ function splitEqualGroups(y, X, covSel, nPerGroup)
     nParamObs = length(covSel) # number of parameters in observation model
     nElements = length(y)
     Y = Vector{Vector{eltype(y)}}()
-    Z = Vector(undef, nParamObs)    # Z[j] holds the covariates in j:th obs model parameter
-    for j in 1:nParamObs
-        if !isnothing(covSel[j]) && !isempty(covSel[j])
-            Z[j] = Vector{Matrix{eltype(X)}}()
-        else
-            Z[j] = nothing
-        end
-    end
+    Z = [Vector{Matrix{eltype(X)}}() for j in 1:nParamObs] # Z[j] is covs in j:th obs param 
     i = 1
     while i <= nElements
         push!(Y, y[i:min(i + nPerGroup - 1, nElements)])
@@ -61,10 +54,12 @@ function splitEqualGroups(y, X, covSel, nPerGroup)
         i += nPerGroup
     end
     groupSizes = length.(Y)
+    Xselected = [X[:, covSel[j]] for j in 1:nParamObs]
 
-    return Y, Z, groupSizes
+    return Y, Z, Xselected, groupSizes
 end
 
+# TODO: remove this since it is deprecated and not used anywhere?
 # Helper function to make groups of equal size, last group may be smaller
 function splitEqualGroups(y, X, nPerGroup)
     if typeof(X) <: Vector && (length(X) != length(y))

@@ -390,19 +390,19 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
 end
 
 
-function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ, 
-        μ₀, Σ₀, maxIter, ScaleMat, Svec; α = 1, β = 0, κ = 0, filter_output = false, 
-        sample_t0 = true, nFailure = Ref(0))
+function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ,
+    μ₀, Σ₀, maxIter, ScaleMat, Svec; α=1, β=0, κ=0, filter_output=false,
+    sample_t0=true, nFailure=Ref(0))
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
-    q = size(U,2)   # Dimension of the control vector
+    q = size(U, 2)   # Dimension of the control vector
     staticA = (ndims(A) == 3) ? false : true
-    staticΣₙ = (ndims(Σₙ) == 3  || eltype(Σₙ) <: PDMat) ? false : true
+    staticΣₙ = (ndims(Σₙ) == 3 || eltype(Σₙ) <: PDMat) ? false : true
 
     # Set up the weights for the UT transform
-    λ  = α^2*(n + κ) - n
-    ωₘ = [λ/(n + λ); ones(2*n)/(2*(n + λ))]
-    ωₛ  = [λ/(n + λ) + (1 - α^2 + β); ωₘ[2:end]]
+    λ = α^2 * (n + κ) - n
+    ωₘ = [λ / (n + λ); ones(2 * n) / (2 * (n + λ))]
+    ωₛ = [λ / (n + λ) + (1 - α^2 + β); ωₘ[2:end]]
 
     γ = sqrt(n + λ)
 
@@ -415,30 +415,30 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
     μ = deepcopy(μ₀)
     Σ = deepcopy(Σ₀)
 
-    for t = 1:T 
+    for t = 1:T
         S = ScaleMat(param, μ, t)
-        Svec[:,:,t] .= S
+        Svec[:, :, t] .= S
 
-        At = staticA ? A : @view A[:,:,t]
+        At = staticA ? A : @view A[:, :, t]
         Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S)
-        u = (q == 1) ? U[t] : U[t,:]
+        u = (q == 1) ? U[t] : U[t, :]
         filter_result = try
-            kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov, 
-                param,  Σₙt, t, maxIter, γ ,ωₘ, ωₛ)
+            kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov,
+                param, Σₙt, t, maxIter, γ, ωₘ, ωₛ)
         catch
             nFailure[] += 1
             return nothing
         end
         μ, Σ, μ̄, Σ̄ = filter_result
-        
-        μ_filter[t,:] .= μ
-        Σ_filter[:,:,t] .= Σ
-        μ_pred[t,:] .= μ̄
-        Σ_pred[:,:,t] .= Σ̄
+
+        μ_filter[t, :] .= μ
+        Σ_filter[:, :, t] .= Σ
+        μ_pred[t, :] .= μ̄
+        Σ_pred[:, :, t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀; 
-        sample_t0 = sample_t0)
+    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀;
+        sample_t0=sample_t0)
 
     if filter_output
         return μ_filter, Σ_filter
@@ -501,8 +501,13 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         Σ_pred[:, :, t] .= Σ̄
     end
 
-    BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀;
-        sample_t0=sample_t0)
+    try
+        BackwardSampling!(Draws, μ_filter, Σ_filter, μ_pred, Σ_pred, A, μ₀, Σ₀;
+            sample_t0=sample_t0)
+    catch
+        nFailure[] += 1
+        return nothing
+    end
 
     if filter_output
         return μ_filter, Σ_filter
