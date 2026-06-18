@@ -416,13 +416,14 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
     Σ = deepcopy(Σ₀)
 
     for t = 1:T
-        S = ScaleMat(param, μ, t)
-        Svec[:, :, t] .= S
-
-        At = staticA ? A : @view A[:, :, t]
-        Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S)
-        u = (q == 1) ? U[t] : U[t, :]
         filter_result = try
+            S = ScaleMat(param, μ, t)
+            Svec[:, :, t] .= S
+
+            At = staticA ? A : @view A[:, :, t]
+            Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S) + eps() * I
+            u = (q == 1) ? U[t] : U[t, :]
+
             kalmanfilter_update_IPLF(μ, Σ, u, Y[t], At, B, condMean, condCov,
                 param, Σₙt, t, maxIter, γ, ωₘ, ωₛ)
         catch
@@ -535,14 +536,15 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, 
     μ = deepcopy(μ₀)
     Σ = deepcopy(Σ₀)
     for t in 1:T
-        S = ScaleMat(θ, μ, t)
-        Svec[:, :, t] .= S
-
-        At = staticA ? A : @view A[:, :, t]
-        Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S)
-        u = (q == 1) ? U[t] : U[t, :]
-        #y = (r == 1) ? Y[t] : Y[t,:]
         filter_result = try
+            S = ScaleMat(θ, μ, t)
+            Svec[:, :, t] .= S
+
+            At = staticA ? A : @view A[:, :, t]
+            Σₙt = staticΣₙ ? Hermitian(S * Σₙ * S) : Hermitian(S * Σₙ[t] * S) + eps() * I
+            u = (q == 1) ? U[t] : U[t, :]
+            #y = (r == 1) ? Y[t] : Y[t,:]
+
             laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t,
                 μ_init, max_iter)
         catch
