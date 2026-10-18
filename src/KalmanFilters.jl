@@ -242,8 +242,6 @@ condCov is the conditional covariance of yₜ given xₜ
 
 Reference: Simo Sarkka and Lennart Svensson (2023). Bayesian Filtering and Smoothing. Second Edition. Cambridge University Press.
 """
-
-## PrLF and IPLF
 function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, Σₙ, t,
     maxIter, γ, ωₘ, ωₛ)
 
@@ -270,7 +268,7 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         μₖ⁺ = sum(μₖ .* ωₘ) ## marginal mean of yₜ
         Δμ = reduce(hcat, [v .- μₖ⁺ for v in μₖ])'
         Pₖˣʸ = (χ .- μ) * Diagonal(ωₛ) * Δμ # cross-covariance between xₜ and yₜ
-        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])) # predicted measurement covariance
+        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])) # predict obs cov
 
         ## Linearization of measurement model using Equations (10.14).
         # yₜ ≈ Aₖ * xₜ + bₖ + eₖ, where eₖ ~ N(0, Ωₖ)
@@ -285,9 +283,6 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         Kₖ = try
             Ω̄ * Aₖ' / Sₖ
         catch
-            #println("Ω̄ = ");display(Ω̄)
-            #println("Sₖ = ");display(Sₖ)
-            #println("Aₖ = ");display(Aₖ)
             error("Kalman gain computation failed at iteration $i")
         end
 
@@ -344,37 +339,15 @@ end
 function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100)
 
     # Find mode (MAP estimate)
-    handbaked = false
-    if handbaked
-        function find_mode(x0)
-            x = copy(x0)
-            for _ in 1:max_iter
-                g = ForwardDiff.gradient(logposterior, x)
-                H = ForwardDiff.hessian(logposterior, x)
-                #g = ForwardDiff.derivative(logposterior, x)
-                #H = ForwardDiff.derivative(x -> ForwardDiff.derivative(logposterior, x), x)
-                Δx = -H \ g  # Newton-Raphson step
-                x += Δx
-                if norm(Δx) < 1e-6
-                    return x
-                end
-            end
-            error("Mode finding did not converge")
-        end
-        θ_mode = find_mode(initial_guess)
-    else
-        optres = optimize(x -> -logposterior(x), initial_guess,
-            method=NewtonTrustRegion();
+    optres = optimize(x -> -logposterior(x), initial_guess, method=NewtonTrustRegion();
             autodiff=:forward, f_abstol=1e-6, iterations=max_iter)
-        θ_mode = Optim.minimizer(optres)
-        if Optim.iterations(optres) > 10
-            println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
-        end
+    θ_mode = Optim.minimizer(optres)
+    if Optim.iterations(optres) > 10
+        println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
     end
 
     # Compute Hessian at mode
     Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
-    #Σ = -inv(ForwardDiff.derivative(θ_mode -> ForwardDiff.derivative(logposterior, #θ_mode), θ_mode))  # Covariance matrix
 
     # Adjust covariance if needed (sometimes too narrow/wide)
     Σ *= cov_scale^2

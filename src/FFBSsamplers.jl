@@ -487,7 +487,6 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         At = staticA ? A : @view A[:, :, t]
         Σₙt = staticΣₙ ? Σₙ : Σₙ[t]
         u = (q == 1) ? U[t] : U[t, :]
-        #y = (r == 1) ? Y[t] : Y[t,:]
         filter_result = try
             laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t,
                 μ_init, max_iter)
