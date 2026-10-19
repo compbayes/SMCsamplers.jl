@@ -1,4 +1,4 @@
-# nSim = 1 method: Xdraws is (T + sample_t0) × n matrix
+# nSim = 1 method: Xdraws is (T + `sample_t0`) × n matrix
 @views function BackwardSampling!(Xdraws::AbstractMatrix, μ_filter, Σ_filter,
     μ_pred, Σ_pred, A, μ₀, Σ₀; sample_t0=true)
     T, n = size(μ_filter)
@@ -49,7 +49,7 @@ function BackwardSamplingThin!(Xdraws::AbstractArray{<:Real,3}, μ_filter, Σ_fi
     end
 end
 
-# nSim > 1 method: Xdraws is (T + sample_t0) × n × nSim array — dispatch on AbstractArray
+# nSim > 1 method: Xdraws is (T + `sample_t0`) × n × nSim array — dispatch on AbstractArray
 @views function BackwardSampling!(Xdraws::AbstractArray{<:Real,3}, μ_filter, Σ_filter,
     μ_pred, Σ_pred, A, μ₀, Σ₀; sample_t0=true)
     T, n = size(μ_filter)   # T does not include t=0, n is the dim of state
@@ -94,8 +94,8 @@ end
     end
 end
 
-""" 
-    Xdraws = FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀, nSim = 1) 
+"""
+    FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀; filter_output = false, sample_t0 = true)
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the state space model:
@@ -112,12 +112,18 @@ uₜ is the m-dim control
 
 yₜ is the k-dim observed data. 
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
 μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
-A, C, Σₑ and Σₙ can be deterministically time-varying by passing 3D arrays of size n×n×T.
+A and C can be deterministically time-varying by passing 3D arrays with the time index last.
+Σₑ and Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
 
 """
 function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀;
@@ -163,7 +169,8 @@ function FFBS!(Draws, U, Y, A, B, C, Σₑ, Σₙ, μ₀, Σ₀;
 end
 
 """ 
-    FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
+    FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, maxIter = 1, tol = 1e-2,
+        linesearch = false; filter_output = false, sample_t0 = true)
 
 Forward filtering and backward sampling from the joint smoothing posterior 
 p(x1,...xT | y1,...,yT) of the state space model with nonlinear measurement equation:
@@ -174,7 +181,7 @@ xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
 where
 
-C(xₜ) is a non-linear function that we can ForwardDiff.jl to get the Jacobian
+C(xₜ) is a non-linear function, evaluated as `C(x, Cargs)`, with Jacobian `∂C(x, Cargs)`
 
 xₜ is the n-dim state
 
@@ -182,11 +189,25 @@ uₜ is the m-dim control
 
 yₜ is the k-dim observed data. 
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
-μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+The filter is the extended Kalman filter if `maxIter == 1`, otherwise the iterated extended
+Kalman filter with at most `maxIter` iterations and convergence tolerance `tol` on the
+change in the state mean. If `linesearch` is true, each iteration uses a backtracking
+line search.
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
+Cargs is either fixed over time or a vector of length T with Cargs[t] used at time t.
+
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
+A can be deterministically time-varying by passing an n×n×T array.
+Σₑ and Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
+
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
 
 """
 function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, maxIter=1,
@@ -245,10 +266,12 @@ function FFBSx!(Draws, U, Y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, μ₀, Σ₀, m
 end
 
 """ 
-    FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀) 
+    FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀;
+        α = 1, β = 0, κ = 0, filter_output = false, sample_t0 = true)
 
-Forward filtering and backward sampling from the joint smoothing posterior 
-p(x1,...xT | y1,...,yT) of the state space model with nonlinear measurement equation:
+Forward filtering with the unscented Kalman filter and backward sampling from the joint
+smoothing posterior p(x1,...xT | y1,...,yT) of the state space model with nonlinear
+measurement equation:
 
 yₜ = C(xₜ) + εₜ,         εₜ ~ N(0,Σₑ)         Measurement equation
 
@@ -256,7 +279,7 @@ xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
 where
 
-C(xₜ) is a non-linear function
+C(xₜ) is a non-linear function, evaluated as `C(x, Cargs[t])`
 
 xₜ is the n-dim state
 
@@ -264,11 +287,21 @@ uₜ is the m-dim control
 
 yₜ is the k-dim observed data. 
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
-μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+α, β and κ are the parameters of the unscented transform.
+Cargs is a vector of length T with Cargs[t] used at time t.
 
-Note: If nSim == 1, the returned Xdraws is matrix, otherwise it is a 3D array of size T×n×nSim.
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
+A can be deterministically time-varying by passing an n×n×T array.
+Σₑ and Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
+
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
 
 """
 function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀;
@@ -320,20 +353,44 @@ function FFBS_unscented!(Draws, U, Y, A, B, C, Cargs, Σₑ, Σₙ, μ₀, Σ₀
 end
 
 """ 
-    FFBS_SLR!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
-        filter_output = false, sample_t0 = true, nFailure = Ref(0)) 
+    FFBS_SLR!(Draws, U, Y, A, B, condMean, condCov, param, Σₙ, μ₀, Σ₀, maxIter;
+        α = 1, β = 0, κ = 0, filter_output = false, sample_t0 = true, nFailure = Ref(0))
+    FFBS_SLR!(Draws, U, Y, A, B, condMean, condCov, param, Σₙ, μ₀, Σ₀, maxIter,
+        ScaleMat, Svec; kwargs...)
 
-Forward filtering using Statistical Linear Regression for linearizing, followed by backward sampling from the joint smoothing posterior: 
-p(x1,...xT | y1,...,yT) of the general state space model:
+Forward filtering with the iterated posterior linearization filter (IPLF), which linearizes
+the measurement model by statistical linear regression (SLR) using the unscented transform,
+followed by backward sampling from the joint smoothing posterior p(x1,...xT | y1,...,yT)
+of the state space model:
 
 yₜ ~ p(yₜ | xₜ)                     Measurement model
 
-xₜ ~ q(xₜ | xₜ₋₁)                   State transition model
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
-μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+The measurement model enters only through its conditional moments
+`condMean(param, x, t)` = E(yₜ | xₜ = x) and `condCov(param, x, t)` = Cov(yₜ | xₜ = x).
+The IPLF runs at most `maxIter` iterations per time step.
+α, β and κ are the parameters of the unscented transform.
 
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
+A can be deterministically time-varying by passing an n×n×T array.
+Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
+
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
+
+If the filter fails at some time step, `nFailure[]` is incremented and the function
+returns `nothing` early, leaving `Draws` unchanged.
+
+A second method takes the extra positional arguments `ScaleMat` and `Svec`. At each t the
+n×n scaling matrix S = ScaleMat(param, μ, t) is evaluated at the current filtered mean μ,
+stored in `Svec[:, :, t]`, and the state noise covariance is replaced by S * Σₙ * S.
 
 """
 function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, param, Σₙ,
@@ -449,20 +506,44 @@ function FFBS_SLR!(Draws, U, Y, A, B, condMean::Function, condCov::Function, par
 end
 
 """ 
-    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
+    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
-        nFailure = Ref(0)) 
+        nFailure = Ref(0))
+    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, ScaleMat, Svec; kwargs...)
 
-Forward filtering and backward sampling from the joint smoothing posterior 
-p(x1,...xT | y1,...,yT) of the general state space model:
+Forward filtering with a Laplace approximation in each measurement update, followed by
+backward sampling from the joint smoothing posterior p(x1,...xT | y1,...,yT) of the state
+space model:
 
 yₜ ~ p(yₜ | xₜ)                     Measurement model
 
-xₜ ~ p(xₜ | xₜ₋₁)                   State transition model
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
-μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+`observation(θ, x, t)` returns the distribution of yₜ given xₜ = x. The filtering
+posterior at each t is approximated by a normal distribution centered at its mode, found
+by Newton trust-region optimization with at most `max_iter` iterations starting from
+`μ_init` (defaults to the predicted mean), with covariance from the negative inverse
+Hessian at the mode.
+
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
+A can be deterministically time-varying by passing an n×n×T array.
+Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
+
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
+
+If the filter fails at some time step, `nFailure[]` is incremented and the function
+returns `nothing` early, leaving `Draws` unchanged.
+
+A second method takes the extra positional arguments `ScaleMat` and `Svec`. At each t the
+n×n scaling matrix S = ScaleMat(θ, μ, t) is evaluated at the current filtered mean μ,
+stored in `Svec[:, :, t]`, and the state noise covariance is replaced by S * Σₙ * S.
 
 """
 function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
@@ -567,20 +648,36 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, 
 end
 
 """ 
-    FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ; 
-        filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
-        nFailure = Ref(0)) 
+    FFBS_montecarlo!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
+        filter_output = false, sample_t0 = true, nMC = 1000, nFailure = Ref(0))
 
-Forward filtering and backward sampling from the joint smoothing posterior 
-p(x1,...xT | y1,...,yT) of the general state space model:
+Forward filtering with a Monte Carlo Gaussian filter, followed by backward sampling from
+the joint smoothing posterior p(x1,...xT | y1,...,yT) of the state space model:
 
 yₜ ~ p(yₜ | xₜ)                     Measurement model
 
-xₜ ~ p(xₜ | xₜ₋₁)                   State transition model
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
-The observed data observations are the rows of the T×k matrix Y
-The control signals are the rows of the T×m matrix U
-μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀
+`observation(θ, x, t)` returns the distribution of yₜ given xₜ = x. In each measurement
+update, `nMC` states are drawn from the predictive distribution and an observation is
+simulated for each; the Kalman gain is formed from the Monte Carlo estimates of the
+covariance of yₜ and the cross-covariance between xₜ and yₜ.
+
+Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
+U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
+μ₀ and Σ₀ are the mean and covariance of the initial state vector x₀.
+A can be deterministically time-varying by passing an n×n×T array.
+Σₙ can be time-varying by passing a vector of T `PDMat` covariance matrices.
+
+The draws are written in place into `Draws`, which is a (T + `sample_t0`)×n matrix for a
+single draw, or a (T + `sample_t0`)×n×nSim array for nSim draws. If `sample_t0` is true,
+the first row holds the draw of x₀.
+
+Returns `nothing`, or the filtered means (T×n) and covariances (n×n×T) if `filter_output`
+is true.
+
+If the filter fails at some time step, `nFailure[]` is incremented and the function
+returns `nothing` early, leaving `Draws` unchanged.
 
 """
 function FFBS_montecarlo!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;

@@ -1,17 +1,20 @@
+"""
+    NewtonRaphson(∇, H, x0, tol = 1e-6, max_iter = 100, nugget = 1e-6)
+
+Newton-Raphson method for finding an optimum of a function f with gradient ∇ and Hessian H.
+
+Inputs:
+- `∇`: gradient function, x -> ∇f(x)
+- `H`: Hessian function, x -> ∇²f(x)
+- `x0`: initial guess
+- `tol`: convergence tolerance on the norm of the gradient
+- `max_iter`: maximum number of iterations
+- `nugget`: added to the Hessian diagonal, H(x) + nugget*I, for numerical stability
+
+Output:
+- `x`: approximate optimum. Throws an error if not converged within `max_iter` iterations.
+"""
 function NewtonRaphson(∇, H, x0, tol = 1e-6, max_iter = 100, nugget = 1e-6)
-    """
-    Newton-Raphson method for finding optimum of the function f with gradient ∇ and Hessian H.
-
-    Inputs:
-    ∇: Gradient function
-    H: Hessian function
-    x0: Initial guess
-    tol: Tolerance for convergence
-    max_iter: Maximum number of iterations
-
-    Outputs:
-    x: Approximate optimum
-    """
     x = x0
     for i in 1:max_iter
         grad = ∇(x)
