@@ -4,8 +4,6 @@ using Plots, LinearAlgebra, Distributions, Statistics, Random
 using Measures, PDMats, LaTeXStrings, ForwardDiff
 using LineSearches, Optim
 using Utils: quantile_multidim
-include("Misc.jl")
-export NewtonRaphson
 
 include("KalmanFilters.jl")
 export kalmanfilter_update, kalmanfilter_update_extended, kalmanfilter_update_unscented
