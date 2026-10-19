@@ -4,5 +4,7 @@ SMCsamplers.kalmanfilter_update_extended
 SMCsamplers.kalmanfilter_update_extended_iter
 SMCsamplers.kalmanfilter_update_extended_iter_line
 SMCsamplers.kalmanfilter_update_unscented
+SMCsamplers.kalmanfilter_update_IPLF
 SMCsamplers.laplace_kalmanfilter_update
+SMCsamplers.kalmanfilter_update_montecarlo
 ```
