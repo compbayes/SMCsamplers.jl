@@ -13,11 +13,14 @@ const EXAMPLES_OUT = joinpath(@__DIR__, "src", "examples")
 ispath(EXAMPLES_OUT) && rm(EXAMPLES_OUT; recursive=true)
 mkpath(EXAMPLES_OUT)
 
-# Install and precompile all packages
+# Install and precompile all packages, one example at a time, before running the examples
+# in parallel. Example manifests are not committed, so each environment is resolved for the
+# Julia version that builds the docs.
 # Workaround for https://github.com/JuliaLang/Pkg.jl/issues/2219
 examples = filter!(isdir, readdir(joinpath(@__DIR__, "..", "examples"); join=true))
 above = joinpath(@__DIR__, "..")
-let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.instantiate(); Pkg.develop(path=\"$(above)\");"
+let script = "using Pkg; Pkg.activate(ARGS[1]); Pkg.develop(path=\"$(above)\"); " *
+             "Pkg.instantiate(); Pkg.precompile()"
     for example in examples
         if !success(`$(Base.julia_cmd()) -e $script $example`)
             error("project environment of example ", basename(example), " could not be instantiated",)

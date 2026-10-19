@@ -63,9 +63,9 @@ end
 
 
 """ 
-    kalmanfilter_update_extended_iter(μ, Ω, u, y, A, B, C, ∂C, Cargs, Σₑ, Σₙ) 
+    kalmanfilter_update_extended_iter(μ, Ω, u, y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, maxIter = 1, tol = 1e-2)
 
-A single extended Kalman filter update at time t of the state space model: 
+A single iterated extended Kalman filter update at time t of the state space model: 
 
 yₜ = C(xₜ) + εₜ,         εₜ ~ N(0,Σₑ)         Measurement equation
 xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
@@ -75,6 +75,9 @@ where C(xₜ) is a non-linear measurement function
 xₜ is the n-dim state
 uₜ is the m-dim control
 yₜ is the k-dim observed data. 
+
+The linearization point is iterated at most `maxIter` times or until the change in the
+mean is below `tol`.
 
 Reference: Thrun, Burgard and Fox (2006). Probabilistic Robotics, Algorithm Kalman_filter in Table 3.
 
@@ -110,9 +113,9 @@ end
 
 
 """ 
-    kalmanfilter_update_extended_iter_line(μ, Ω, u, y, A, B, C, ∂C, Cargs, Σₑ, Σₙ) 
+    kalmanfilter_update_extended_iter_line(μ, Ω, u, y, A, B, C, ∂C, Cargs, Σₑ, Σₙ, maxIter = 1, tol = 1e-2)
 
-A single extended Kalman filter update at time t of the state space model: 
+A single iterated extended Kalman filter update at time t of the state space model: 
 
 yₜ = C(xₜ) + εₜ,         εₜ ~ N(0,Σₑ)         Measurement equation
 xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
@@ -122,6 +125,9 @@ where C(xₜ) is a non-linear measurement function
 xₜ is the n-dim state
 uₜ is the m-dim control
 yₜ is the k-dim observed data. 
+
+The mean is found by iterating Gauss-Newton steps with a backtracking line search, at most
+`maxIter` times or until the change in the mean is below `tol`.
 
 Reference: Thrun, Burgard and Fox (2006). Probabilistic Robotics, Algorithm Kalman_filter in Table 3.
 
@@ -183,7 +189,7 @@ end
 
 
 """ 
-    kalmanfilter_update_unscented(μ, Ω, u, y, A, B, C, Cargs, Σₑ, Σₙ) 
+    kalmanfilter_update_unscented(μ, Ω, u, y, A, B, C, Cargs, Σₑ, Σₙ, γ, ωₘ, ωₛ)
 
 A single unscented Kalman filter update at time t of the state space model: 
 
@@ -225,25 +231,32 @@ end
 
 
 """ 
-    kalmanfilter_update_IPLF(μ, Ω, u, y, A, B,  condMean, condCov, Cargs,  Σₙ, maxIter, γ, W) 
+    kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, Σₙ, t,
+        maxIter, γ, ωₘ, ωₛ)
 
-A single extended Kalman filter update at time t of the state space model: 
+A single iterated posterior linearization filter (IPLF) update at time t of the state
+space model:
 
-yₜ ~ p(xₜ),                               Measurement equation
+yₜ ~ p(yₜ | xₜ)                               Measurement model
 xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 
-where f(xₜ) is the distribution of observations.
+where
 
 xₜ is the n-dim state
 uₜ is the m-dim control
-yₜ is the k-dim observed data. 
-condMean is the conditional mean of yₜ given xₜ
-condCov is the conditional covariance of yₜ given xₜ
+yₜ is the k-dim observed data.
+`condMean(param, x, t)` is the conditional mean of yₜ given xₜ = x
+`condCov(param, x, t)` is the conditional covariance of yₜ given xₜ = x
+
+The measurement model is linearized by statistical linear regression with respect to the
+current posterior approximation, using sigma points with spread γ and mean and covariance
+weights ωₘ and ωₛ. This is iterated at most `maxIter` times, stopping early when the
+KL divergence between successive approximations is below 1e-3.
+
+Returns the filtered mean and covariance, and the predicted mean and covariance.
 
 Reference: Simo Sarkka and Lennart Svensson (2023). Bayesian Filtering and Smoothing. Second Edition. Cambridge University Press.
 """
-
-## PrLF and IPLF
 function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, Σₙ, t,
     maxIter, γ, ωₘ, ωₛ)
 
@@ -270,7 +283,7 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         μₖ⁺ = sum(μₖ .* ωₘ) ## marginal mean of yₜ
         Δμ = reduce(hcat, [v .- μₖ⁺ for v in μₖ])'
         Pₖˣʸ = (χ .- μ) * Diagonal(ωₛ) * Δμ # cross-covariance between xₜ and yₜ
-        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])) # predicted measurement covariance
+        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])) # predict obs cov
 
         ## Linearization of measurement model using Equations (10.14).
         # yₜ ≈ Aₖ * xₜ + bₖ + eₖ, where eₖ ~ N(0, Ωₖ)
@@ -285,9 +298,6 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         Kₖ = try
             Ω̄ * Aₖ' / Sₖ
         catch
-            #println("Ω̄ = ");display(Ω̄)
-            #println("Sₖ = ");display(Sₖ)
-            #println("Aₖ = ");display(Aₖ)
             error("Kalman gain computation failed at iteration $i")
         end
 
@@ -314,9 +324,20 @@ end
 
 
 """ 
-    laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t) 
+    laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t,
+        μ_init = nothing, max_iter = 100)
 
+A single filter update at time t where the measurement update is a Laplace approximation
+of the filtering posterior in the state space model:
 
+yₜ ~ p(yₜ | xₜ)                               Measurement model
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
+
+`observation(param, x, t)` returns the distribution of yₜ given xₜ = x. The mode search
+starts at `μ_init`, or at the predicted mean if `μ_init` is nothing, and runs at most
+`max_iter` iterations.
+
+Returns the filtered mean and covariance, and the predicted mean and covariance.
 """
 function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t,
     μ_init=nothing, max_iter=100)
@@ -344,37 +365,15 @@ end
 function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100)
 
     # Find mode (MAP estimate)
-    handbaked = false
-    if handbaked
-        function find_mode(x0)
-            x = copy(x0)
-            for _ in 1:max_iter
-                g = ForwardDiff.gradient(logposterior, x)
-                H = ForwardDiff.hessian(logposterior, x)
-                #g = ForwardDiff.derivative(logposterior, x)
-                #H = ForwardDiff.derivative(x -> ForwardDiff.derivative(logposterior, x), x)
-                Δx = -H \ g  # Newton-Raphson step
-                x += Δx
-                if norm(Δx) < 1e-6
-                    return x
-                end
-            end
-            error("Mode finding did not converge")
-        end
-        θ_mode = find_mode(initial_guess)
-    else
-        optres = optimize(x -> -logposterior(x), initial_guess,
-            method=NewtonTrustRegion();
+    optres = optimize(x -> -logposterior(x), initial_guess, method=NewtonTrustRegion();
             autodiff=:forward, f_abstol=1e-6, iterations=max_iter)
-        θ_mode = Optim.minimizer(optres)
-        if Optim.iterations(optres) > 10
-            println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
-        end
+    θ_mode = Optim.minimizer(optres)
+    if Optim.iterations(optres) > 10
+        println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
     end
 
     # Compute Hessian at mode
     Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
-    #Σ = -inv(ForwardDiff.derivative(θ_mode -> ForwardDiff.derivative(logposterior, #θ_mode), θ_mode))  # Covariance matrix
 
     # Adjust covariance if needed (sometimes too narrow/wide)
     Σ *= cov_scale^2
@@ -385,6 +384,21 @@ function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_i
 end
 
 
+"""
+    kalmanfilter_update_montecarlo(μ, Ω, u, y, A, B, observation, param, Σₙ, t, nMC)
+
+A single Monte Carlo Gaussian filter update at time t of the state space model:
+
+yₜ ~ p(yₜ | xₜ)                               Measurement model
+xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
+
+`observation(param, x, t)` returns the distribution of yₜ given xₜ = x. `nMC` states are
+drawn from the predictive distribution N(μ̄, Ω̄) and one observation is simulated for each.
+The Kalman update then uses the Monte Carlo estimates of the mean and covariance of yₜ
+and of the cross-covariance between xₜ and yₜ.
+
+Returns the filtered mean and covariance, and the predicted mean and covariance.
+"""
 function kalmanfilter_update_montecarlo(μ, Ω, u, y, A, B, observation, param, Σₙ, t, nMC)
 
     ### Prior propagation
