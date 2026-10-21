@@ -508,7 +508,7 @@ end
 """ 
     FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         filter_output = false, sample_t0 = true, μ_init = nothing, max_iter = 100,
-        nFailure = Ref(0))
+        fisherinfo = nothing, nFailure = Ref(0))
     FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, ScaleMat, Svec; kwargs...)
 
 Forward filtering with a Laplace approximation in each measurement update, followed by
@@ -524,6 +524,11 @@ posterior at each t is approximated by a normal distribution centered at its mod
 by Newton trust-region optimization with at most `max_iter` iterations starting from
 `μ_init` (defaults to the predicted mean), with covariance from the negative inverse
 Hessian at the mode.
+
+If `fisherinfo(θ, x, t)` is given, it should return the n×n Fisher information of yₜ with
+respect to xₜ = x. The expected information (Fisher information plus the inverse of the
+predicted covariance) is then used in place of the observed information, both in the
+Newton trust-region iterations and for the covariance at the mode.
 
 Y is a vector of length T where Y[t] is the observation at time t (a scalar or a k-vector).
 U holds the controls: a T-vector if m = 1, otherwise a T×m matrix with uₜ in row t.
@@ -548,7 +553,7 @@ stored in `Svec[:, :, t]`, and the state noise covariance is replaced by S * Σ�
 """
 function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
     filter_output=false, sample_t0=true, μ_init=nothing, max_iter=100,
-    nFailure=Ref(0))
+    fisherinfo=nothing, nFailure=Ref(0))
     T = length(Y)   # Number of time steps
     n = length(μ₀)  # Dimension of the state vector  
     #r = size(Y,2)   # Dimension of the observed data vector
@@ -570,7 +575,7 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ;
         u = (q == 1) ? U[t] : U[t, :]
         filter_result = try
             laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t,
-                μ_init, max_iter)
+                μ_init, max_iter, fisherinfo)
         catch
             nFailure[] += 1
             return nothing
@@ -598,7 +603,7 @@ end
 
 function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, ScaleMat, Svec;
     filter_output=false, sample_t0=true, μ_init=nothing, max_iter=100,
-    nFailure=Ref(0))
+    fisherinfo=nothing, nFailure=Ref(0))
     T = length(Y)   # Number of time steps
 
     n = length(μ₀)  # Dimension of the state vector  
@@ -626,7 +631,7 @@ function FFBS_laplace!(Draws, U, Y, A, B, Σₙ, μ₀, Σ₀, observation, θ, 
             #y = (r == 1) ? Y[t] : Y[t,:]
 
             laplace_kalmanfilter_update(μ, Σ, u, Y[t], At, B, observation, θ, Σₙt, t,
-                μ_init, max_iter)
+                μ_init, max_iter, fisherinfo)
         catch
             nFailure[] += 1
             return nothing
