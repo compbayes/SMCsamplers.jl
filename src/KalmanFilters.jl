@@ -325,7 +325,7 @@ end
 
 """ 
     laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t,
-        μ_init = nothing, max_iter = 100)
+        μ_init = nothing, max_iter = 100, fisherinfo = nothing)
 
 A single filter update at time t where the measurement update is a Laplace approximation
 of the filtering posterior in the state space model:
@@ -337,10 +337,17 @@ xₜ = Axₜ₋₁+ Buₜ + ηₜ,    ηₜ ~ N(0,Σₙ)         State equation
 starts at `μ_init`, or at the predicted mean if `μ_init` is nothing, and runs at most
 `max_iter` iterations.
 
+By default the observed information (negative Hessian of the log posterior) is used both
+in the Newton trust-region iterations and for the covariance at the mode. If
+`fisherinfo(param, x, t)` is given, it should return the n×n Fisher information of yₜ with
+respect to xₜ = x, and the expected information `fisherinfo(param, x, t) + inv(Ω̄)` is used
+in place of the observed information in both the iterations and the covariance, where Ω̄
+is the predicted covariance.
+
 Returns the filtered mean and covariance, and the predicted mean and covariance.
 """
 function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σₙ, t,
-    μ_init=nothing, max_iter=100)
+    μ_init=nothing, max_iter=100, fisherinfo=nothing)
 
     # Prior propagation step - moving state forward without new measurement
     μ̄ = A * μ .+ B * u
@@ -354,7 +361,13 @@ function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σ�
     μ, Ω = try
         filt_logpost(x) = logpdf(observation(param, x, t), y) +
                           logpdf(MvNormal(μ̄[:], Ω̄), x)
-        laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)  # Initial guess 
+        if isnothing(fisherinfo)
+            laplace_approximation(filt_logpost, μ_init, 1.0, max_iter)
+        else
+            Ω̄inv = inv(Ω̄)
+            expected_info(x) = fisherinfo(param, x, t) + Ω̄inv
+            laplace_approximation(filt_logpost, μ_init, 1.0, max_iter, expected_info)
+        end
     catch
         error("Laplace approximation failed at time $t")
     end
@@ -362,18 +375,34 @@ function laplace_kalmanfilter_update(μ, Ω, u, y, A, B, observation, param, Σ�
     return μ, Ω, μ̄, Ω̄
 end
 
-function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100)
+# If `information` is given, `information(x)` replaces the negative Hessian of
+# `logposterior` in the Newton trust-region iterations and in the covariance at the mode.
+function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100,
+    information=nothing)
 
     # Find mode (MAP estimate)
-    optres = optimize(x -> -logposterior(x), initial_guess, method=NewtonTrustRegion();
-            autodiff=:forward, f_abstol=1e-6, iterations=max_iter)
+    if isnothing(information)
+        optres = optimize(x -> -logposterior(x), initial_guess, method=NewtonTrustRegion();
+                autodiff=:forward, f_abstol=1e-6, iterations=max_iter)
+    else
+        neglogpost(x) = -logposterior(x)
+        grad!(G, x) = ForwardDiff.gradient!(G, neglogpost, x)
+        info!(H, x) = (H .= information(x))
+        objective = TwiceDifferentiable(neglogpost, grad!, info!, float.(initial_guess))
+        optres = optimize(objective, initial_guess, NewtonTrustRegion(),
+            Optim.Options(f_abstol=1e-6, iterations=max_iter))
+    end
     θ_mode = Optim.minimizer(optres)
     if Optim.iterations(optres) > 10
         println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
     end
 
-    # Compute Hessian at mode
-    Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
+    # Compute Hessian (or expected information) at mode
+    if isnothing(information)
+        Σ = -inv(ForwardDiff.hessian(logposterior, θ_mode))  # Covariance matrix
+    else
+        Σ = inv(Symmetric(Matrix(information(θ_mode))))
+    end
 
     # Adjust covariance if needed (sometimes too narrow/wide)
     Σ *= cov_scale^2
