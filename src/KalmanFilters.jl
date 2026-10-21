@@ -380,18 +380,15 @@ end
 function laplace_approximation(logposterior, initial_guess, cov_scale=1.0, max_iter=100,
     information=nothing)
 
-    # Find mode (MAP estimate)
-    if isnothing(information)
-        optres = optimize(x -> -logposterior(x), initial_guess, method=NewtonTrustRegion();
-                autodiff=:forward, f_abstol=1e-6, iterations=max_iter)
-    else
-        neglogpost(x) = -logposterior(x)
-        grad!(G, x) = ForwardDiff.gradient!(G, neglogpost, x)
-        info!(H, x) = (H .= information(x))
-        objective = TwiceDifferentiable(neglogpost, grad!, info!, float.(initial_guess))
-        optres = optimize(objective, initial_guess, NewtonTrustRegion(),
-            Optim.Options(f_abstol=1e-6, iterations=max_iter))
-    end
+    # Find mode (MAP estimate). Gradient and Hessian are passed explicitly, which avoids
+    # Optim preparing its own automatic differentiation in every call.
+    neglogpost(x) = -logposterior(x)
+    grad!(G, x) = ForwardDiff.gradient!(G, neglogpost, x)
+    hess! = isnothing(information) ? (H, x) -> ForwardDiff.hessian!(H, neglogpost, x) :
+            (H, x) -> (H .= information(x))
+    objective = TwiceDifferentiable(neglogpost, grad!, hess!, float.(initial_guess))
+    optres = optimize(objective, initial_guess, NewtonTrustRegion(),
+        Optim.Options(f_abstol=1e-6, iterations=max_iter))
     θ_mode = Optim.minimizer(optres)
     if Optim.iterations(optres) > 10
         println("nIter to mode is larger than 10: $(Optim.iterations(optres))")
