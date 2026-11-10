@@ -276,19 +276,20 @@ function kalmanfilter_update_IPLF(μ, Ω, u, y, A, B, condMean, condCov, param, 
         χ = [μ μ .+ (L̄ * γ) μ .- (L̄ * γ)] # n×(2n+1) matrix with sigma points; N(μ, Ω)
 
         ## Propagate the sigma points through the conditional mean and covariance functions
-        μₖ = [condMean(param, χ[:, i], t) for i in 1:size(χ, 2)]
-        Pₖʸ = [condCov(param, χ[:, i], t) for i in 1:size(χ, 2)]
+        μₖ = [condMean(param, χ[:, j], t) for j in 1:size(χ, 2)]
+        Pcond = [condCov(param, χ[:, j], t) for j in 1:size(χ, 2)]
 
         ## Compute the required moments:
         μₖ⁺ = sum(μₖ .* ωₘ) ## marginal mean of yₜ
         Δμ = reduce(hcat, [v .- μₖ⁺ for v in μₖ])'
         Pₖˣʸ = (χ .- μ) * Diagonal(ωₛ) * Δμ # cross-covariance between xₜ and yₜ
-        Pₖʸ = sum(ωₛ .* (Pₖʸ .+ [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])) # predict obs cov
+        Pₖʸ = sum(ωₘ .* Pcond) +                                   # E[Cov(y|x)]
+              sum(ωₛ .* [(v .- μₖ⁺) * (v .- μₖ⁺)' for v in μₖ])    # Cov(E[y|x])
 
         ## Linearization of measurement model using Equations (10.14).
         # yₜ ≈ Aₖ * xₜ + bₖ + eₖ, where eₖ ~ N(0, Ωₖ)
 
-        Aₖ = Pₖˣʸ' * inv(Ω)
+        Aₖ =  Pₖˣʸ' / Ω
         bₖ = μₖ⁺ .- Aₖ * μ
         Ωₖ = Pₖʸ .- Aₖ * Ω * Aₖ'
 
